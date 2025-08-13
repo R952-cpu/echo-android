@@ -225,26 +225,10 @@ private fun ChatInputSection(
         Column {
             HorizontalDivider(color = colorScheme.outline.copy(alpha = 0.3f))
             // Command suggestions box
-            if (showCommandSuggestions && commandSuggestions.isNotEmpty()) {
-                CommandSuggestionsBox(
-                    suggestions = commandSuggestions,
-                    onSuggestionClick = onCommandSuggestionClick,
-                    modifier = Modifier.fillMaxWidth()
-                )
 
-                HorizontalDivider(color = colorScheme.outline.copy(alpha = 0.2f))
-            }
             
             // Mention suggestions box
-            if (showMentionSuggestions && mentionSuggestions.isNotEmpty()) {
-                MentionSuggestionsBox(
-                    suggestions = mentionSuggestions,
-                    onSuggestionClick = onMentionSuggestionClick,
-                    modifier = Modifier.fillMaxWidth()
-                )
 
-                HorizontalDivider(color = colorScheme.outline.copy(alpha = 0.2f))
-            }
 
             MessageInput(
                 value = messageText,

@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -24,7 +23,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
@@ -210,20 +208,7 @@ fun MessageInput(
         
         Spacer(modifier = Modifier.width(8.dp)) // Reduced spacing
         
-        // Command quick access button
-        if (value.text.isEmpty()) {
-            FilledTonalIconButton(
-                onClick = {
-                    onValueChange(TextFieldValue(text = "/", selection = TextRange("/".length)))
-                },
-                modifier = Modifier.size(32.dp)
-            ) {
-                Text(
-                    text = "/",
-                    textAlign = TextAlign.Center
-                )
-            }
-        } else {
+
             // Send button with enabled/disabled state
             IconButton(
                 onClick = { if (hasText) onSend() }, // Only execute if there's text
@@ -268,7 +253,7 @@ fun MessageInput(
                     )
                 }
             }
-        }
+
     }
 }
 
