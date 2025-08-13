@@ -23,6 +23,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bitchat.android.core.ui.utils.singleOrTripleClickable
+import androidx.compose.ui.platform.LocalContext
+import com.bitchat.android.util.StaffAuth
+import com.bitchat.android.ui.component.StaffBadge
+import com.bitchat.android.ui.component.StaffCodeDialog
 
 /**
  * Header components for ChatScreen
@@ -132,7 +136,7 @@ fun PeerCounter(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colorScheme = MaterialTheme.colorScheme
+
     
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -203,7 +207,7 @@ fun ChatHeaderContent(
     onTripleClick: () -> Unit,
     onShowAppInfo: () -> Unit
 ) {
-    val colorScheme = MaterialTheme.colorScheme
+
 
     when {
         selectedPrivatePeer != null -> {
@@ -416,34 +420,51 @@ private fun MainHeader(
     val hasUnreadChannels by viewModel.unreadChannelMessages.observeAsState(emptyMap())
     val hasUnreadPrivateMessages by viewModel.unreadPrivateMessages.observeAsState(emptySet())
     val isConnected by viewModel.isConnected.observeAsState(false)
-    
+    var showStaffDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+
         Row(
             modifier = Modifier.fillMaxHeight(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+
+
             Text(
-                text = "bitchat/",
+                text = "Echo",
                 style = MaterialTheme.typography.headlineSmall,
                 color = colorScheme.primary,
                 modifier = Modifier.singleOrTripleClickable(
                     onSingleClick = onTitleClick,
-                    onTripleClick = onTripleTitleClick
+                    onTripleClick = { showStaffDialog = true }
                 )
             )
-            
+
+// Badge STAFF juste après le Text
+            if (StaffAuth.isStaff(context)) {
+                StaffBadge(context)
+            }
+
             Spacer(modifier = Modifier.width(2.dp))
-            
+
             NicknameEditor(
                 value = nickname,
                 onValueChange = onNicknameChange
             )
+
         }
-        
+
+// Ouvre la boîte de dialogue StaffCode si triple-tap
+        if (showStaffDialog) {
+            StaffCodeDialog { showStaffDialog = false }
+        }
+
+
         PeerCounter(
             connectedPeers = connectedPeers.filter { it != viewModel.meshService.myPeerID },
             joinedChannels = joinedChannels,
