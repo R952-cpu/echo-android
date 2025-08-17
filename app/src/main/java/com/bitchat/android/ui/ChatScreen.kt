@@ -14,6 +14,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
+import com.bitchat.android.util.StaffAuth
 
 /**
  * Main ChatScreen - REFACTORED to use component-based architecture
@@ -217,6 +220,11 @@ private fun ChatInputSection(
     nickname: String,
     colorScheme: ColorScheme
 ) {
+    val context = LocalContext.current
+    val isInMainChat = selectedPrivatePeer == null && currentChannel == null
+    val canSendInMain = StaffAuth.isStaff(context)
+    val canSend = !isInMainChat || canSendInMain
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = colorScheme.background,
@@ -226,19 +234,30 @@ private fun ChatInputSection(
             HorizontalDivider(color = colorScheme.outline.copy(alpha = 0.3f))
             // Command suggestions box
 
-            
+
             // Mention suggestions box
 
 
             MessageInput(
                 value = messageText,
-                onValueChange = onMessageTextChange,
-                onSend = onSend,
+                onValueChange = { if (canSend) onMessageTextChange(it) },
+                onSend = { if (canSend) onSend() },
                 selectedPrivatePeer = selectedPrivatePeer,
                 currentChannel = currentChannel,
                 nickname = nickname,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(if (canSend) 1f else 0.5f)
             )
+
+            if (isInMainChat && !canSendInMain) {
+                Text(
+                    text = "Écriture réservée au STAFF. Triple-tap sur \"Echo\" pour activer le mode staff.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
         }
     }
 }

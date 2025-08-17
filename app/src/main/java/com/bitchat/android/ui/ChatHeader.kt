@@ -252,6 +252,7 @@ fun ChatHeaderContent(
                 onNicknameChange = viewModel::setNickname,
                 onTitleClick = onShowAppInfo,
                 onTripleTitleClick = onTripleClick,
+                onBackClick = onBackClick,
                 onSidebarClick = onSidebarClick,
                 viewModel = viewModel
             )
@@ -307,11 +308,16 @@ private fun PrivateChatHeader(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.align(Alignment.Center)
         ) {
-            
+
             Text(
                 text = peerNickname,
                 style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFFFF9500) // Orange
+                color = Color(0xFFFF9500), // Orange
+                modifier = Modifier.singleOrTripleClickable(
+                    onSingleClick = {},
+                    onDoubleClick = { onBackClick() },
+                    onTripleClick = {}
+                )
             )
 
             Spacer(modifier = Modifier.width(4.dp))
@@ -388,7 +394,11 @@ private fun ChannelHeader(
             color = Color(0xFFFF9500), // Orange to match input field
             modifier = Modifier
                 .align(Alignment.Center)
-                .clickable { onSidebarClick() }
+                .singleOrTripleClickable(
+                    onSingleClick = { onSidebarClick() },
+                    onDoubleClick = { onBackClick() },
+                    onTripleClick = {}
+                )
         )
         
         // Leave button - positioned on the right
@@ -411,6 +421,7 @@ private fun MainHeader(
     onNicknameChange: (String) -> Unit,
     onTitleClick: () -> Unit,
     onTripleTitleClick: () -> Unit,
+    onBackClick: () -> Unit,
     onSidebarClick: () -> Unit,
     viewModel: ChatViewModel
 ) {
@@ -441,7 +452,11 @@ private fun MainHeader(
                 color = colorScheme.primary,
                 modifier = Modifier.singleOrTripleClickable(
                     onSingleClick = onTitleClick,
-                    onTripleClick = { showStaffDialog = true }
+                    onDoubleClick = { onBackClick() },
+                    onTripleClick = {
+                        onTripleTitleClick()
+                        showStaffDialog = true
+                    }
                 )
             )
 

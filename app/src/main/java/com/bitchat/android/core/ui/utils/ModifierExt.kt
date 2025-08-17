@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 fun Modifier.singleOrTripleClickable(
     onSingleClick: () -> Unit,
     onTripleClick: () -> Unit,
+    onDoubleClick: (() -> Unit)? = null,
     clickTimeThreshold: Long = 300L
 ): Modifier = composed {
     var tapCount by remember { mutableIntStateOf(0) }
@@ -20,12 +21,11 @@ fun Modifier.singleOrTripleClickable(
     this.clickable {
         val currentTime = System.currentTimeMillis()
 
-        if (currentTime - lastTapTime < clickTimeThreshold) {
-            tapCount++
+        tapCount = if (currentTime - lastTapTime < clickTimeThreshold) {
+            tapCount + 1
         } else {
-            tapCount = 1
+            1
         }
-
         lastTapTime = currentTime
 
         // Cancel any pending single click action
@@ -41,6 +41,10 @@ fun Modifier.singleOrTripleClickable(
                         onSingleClick()
                     }
                 }
+            }
+            2 -> {
+                onDoubleClick?.invoke()
+                tapCount = 0
             }
             3 -> {
                 // Triple click detected - execute immediately
