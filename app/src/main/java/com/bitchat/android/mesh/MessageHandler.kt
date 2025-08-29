@@ -269,7 +269,24 @@ class MessageHandler(private val myPeerID: String) {
                     Log.d(TAG, "Discarding private cover traffic from $peerID")
                     return // Silently discard
                 }
-                
+                // PM control messages
+                if (message.isPrivate) {
+                    when (message.content) {
+                        "__pm_request__" -> {
+                            delegate?.onPrivateChatRequest(peerID)
+                            return
+                        }
+                        "__pm_accept__" -> {
+                            delegate?.onPrivateChatResponse(peerID, true)
+                            return
+                        }
+                        "__pm_deny__" -> {
+                            delegate?.onPrivateChatResponse(peerID, false)
+                            return
+                        }
+                    }
+                }
+
                 delegate?.updatePeerNickname(peerID, message.sender)
                 delegate?.onMessageReceived(message)
                 
@@ -404,4 +421,6 @@ interface MessageHandlerDelegate {
     fun onChannelLeave(channel: String, fromPeer: String)
     fun onDeliveryAckReceived(ack: DeliveryAck)
     fun onReadReceiptReceived(receipt: ReadReceipt)
+    fun onPrivateChatRequest(senderPeerID: String)
+    fun onPrivateChatResponse(senderPeerID: String, accepted: Boolean)
 }

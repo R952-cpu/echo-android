@@ -52,7 +52,13 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Exclude macOS AppleDouble and dotfiles that can break AAPT on network volumes
+            excludes += listOf("**/.DS_Store", "**/._*", "**/.git/**", "**/.svn/**")
         }
+    }
+    androidResources {
+        // Instruct AAPT to ignore AppleDouble and hidden files when scanning assets/resources
+        ignoreAssetsPattern = ".*:._*:.DS_Store:.git:__MACOSX"
     }
     lint {
         baseline = file("lint-baseline.xml")
@@ -103,4 +109,15 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.bundles.compose.testing)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+// Clean AppleDouble files that macOS creates on network/external volumes.
+// They can block AAPT resource tasks from deleting intermediates on rebuilds.
+tasks.register<Delete>("cleanAppleDoubleFiles") {
+    delete(fileTree(buildDir) { include("**/._*") })
+}
+
+// Ensure cleanup runs before any build work
+tasks.named("preBuild").configure {
+    dependsOn("cleanAppleDoubleFiles")
 }

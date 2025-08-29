@@ -45,6 +45,12 @@ class ChatState {
     
     private val _unreadPrivateMessages = MutableLiveData<Set<String>>(emptySet())
     val unreadPrivateMessages: LiveData<Set<String>> = _unreadPrivateMessages
+
+    // Private chat consent flow
+    private val _privateChatStates = MutableLiveData<Map<String, com.bitchat.android.model.PrivateChatState>>(emptyMap())
+    val privateChatStates: LiveData<Map<String, com.bitchat.android.model.PrivateChatState>> = _privateChatStates
+    private val _pendingPrivateChatRequestFrom = MutableLiveData<String?>(null)
+    val pendingPrivateChatRequestFrom: LiveData<String?> = _pendingPrivateChatRequestFrom
     
     // Channels
     private val _joinedChannels = MutableLiveData<Set<String>>(emptySet())
@@ -132,6 +138,8 @@ class ChatState {
     fun getPrivateChatsValue() = _privateChats.value ?: emptyMap()
     fun getSelectedPrivateChatPeerValue() = _selectedPrivateChatPeer.value
     fun getUnreadPrivateMessagesValue() = _unreadPrivateMessages.value ?: emptySet()
+    fun getPrivateChatStatesValue() = _privateChatStates.value ?: emptyMap()
+    fun getPendingPrivateChatRequestFromValue() = _pendingPrivateChatRequestFrom.value
     fun getJoinedChannelsValue() = _joinedChannels.value ?: emptySet()
     fun getCurrentChannelValue() = _currentChannel.value
     fun getChannelMessagesValue() = _channelMessages.value ?: emptyMap()
@@ -147,6 +155,7 @@ class ChatState {
     fun getFavoritePeersValue() = _favoritePeers.value ?: emptySet()
     fun getPeerSessionStatesValue() = _peerSessionStates.value ?: emptyMap()
     fun getPeerFingerprintsValue() = _peerFingerprints.value ?: emptyMap()
+    fun getPeerNicknamesValue() = _peerNicknames.value ?: emptyMap()
     fun getShowAppInfoValue() = _showAppInfo.value ?: false
     
     // Setters for state updates
@@ -176,6 +185,16 @@ class ChatState {
     
     fun setUnreadPrivateMessages(unread: Set<String>) {
         _unreadPrivateMessages.value = unread
+    }
+
+    fun setPrivateChatState(peerID: String, newState: com.bitchat.android.model.PrivateChatState) {
+        val current = _privateChatStates.value ?: emptyMap()
+        val updated = current.toMutableMap().apply { put(peerID, newState) }
+        _privateChatStates.value = updated
+    }
+
+    fun setPendingPrivateChatRequestFrom(peerID: String?) {
+        _pendingPrivateChatRequestFrom.value = peerID
     }
     
     fun setJoinedChannels(channels: Set<String>) {
