@@ -195,6 +195,19 @@ class ChatViewModel(
         if (current == com.bitchat.android.model.PrivateChatState.ACTIVE || current == com.bitchat.android.model.PrivateChatState.REQUEST_SENT) return
         if (peerID == meshService.myPeerID) return
 
+        // Ensure Noise session is initiated before sending PM control message
+        if (!meshService.hasEstablishedSession(peerID)) {
+            val myPeerID = meshService.myPeerID
+            if (myPeerID < peerID) {
+                // We initiate the handshake
+                meshService.initiateNoiseHandshake(peerID)
+            } else {
+                // Prompt the other side to initiate
+                meshService.broadcastNoiseIdentityAnnouncement()
+                meshService.sendHandshakeRequest(peerID, 1u)
+            }
+        }
+
         state.setPrivateChatState(peerID, com.bitchat.android.model.PrivateChatState.REQUEST_SENT)
         val peerName = meshService.getPeerNicknames()[peerID] ?: peerID
         val sysMsg = BitchatMessage(
@@ -210,6 +223,18 @@ class ChatViewModel(
     fun acceptPrivateChatRequest(fromPeerID: String) {
         val current = state.getPrivateChatStatesValue()[fromPeerID]
         if (current != com.bitchat.android.model.PrivateChatState.REQUEST_RECEIVED) return
+
+        // Ensure Noise session is initiated so the accept control message can be delivered
+        if (!meshService.hasEstablishedSession(fromPeerID)) {
+            val myPeerID = meshService.myPeerID
+            if (myPeerID < fromPeerID) {
+                meshService.initiateNoiseHandshake(fromPeerID)
+            } else {
+                meshService.broadcastNoiseIdentityAnnouncement()
+                meshService.sendHandshakeRequest(fromPeerID, 1u)
+            }
+        }
+
         state.setPrivateChatState(fromPeerID, com.bitchat.android.model.PrivateChatState.ACTIVE)
         state.setPendingPrivateChatRequestFrom(null)
         meshService.sendPrivateChatResponse(fromPeerID, true)
@@ -219,6 +244,18 @@ class ChatViewModel(
     fun declinePrivateChatRequest(fromPeerID: String) {
         val current = state.getPrivateChatStatesValue()[fromPeerID]
         if (current != com.bitchat.android.model.PrivateChatState.REQUEST_RECEIVED) return
+
+        // Ensure Noise session is initiated so the decline control message can be delivered
+        if (!meshService.hasEstablishedSession(fromPeerID)) {
+            val myPeerID = meshService.myPeerID
+            if (myPeerID < fromPeerID) {
+                meshService.initiateNoiseHandshake(fromPeerID)
+            } else {
+                meshService.broadcastNoiseIdentityAnnouncement()
+                meshService.sendHandshakeRequest(fromPeerID, 1u)
+            }
+        }
+
         state.setPrivateChatState(fromPeerID, com.bitchat.android.model.PrivateChatState.REJECTED)
         state.setPendingPrivateChatRequestFrom(null)
         meshService.sendPrivateChatResponse(fromPeerID, false)

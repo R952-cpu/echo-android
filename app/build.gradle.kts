@@ -110,3 +110,14 @@ dependencies {
     androidTestImplementation(libs.bundles.compose.testing)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+// Clean AppleDouble files that macOS creates on network/external volumes.
+// They can block AAPT resource tasks from deleting intermediates on rebuilds.
+tasks.register<Delete>("cleanAppleDoubleFiles") {
+    delete(fileTree(buildDir) { include("**/._*") })
+}
+
+// Ensure cleanup runs before any build work
+tasks.named("preBuild").configure {
+    dependsOn("cleanAppleDoubleFiles")
+}
