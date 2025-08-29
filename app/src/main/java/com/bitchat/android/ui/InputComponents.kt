@@ -156,7 +156,8 @@ fun MessageInput(
     selectedPrivatePeer: String?,
     currentChannel: String?,
     nickname: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    inputEnabled: Boolean = true
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isFocused = remember { mutableStateOf(false) }
@@ -211,8 +212,8 @@ fun MessageInput(
 
             // Send button with enabled/disabled state
             IconButton(
-                onClick = { if (hasText) onSend() }, // Only execute if there's text
-                enabled = hasText, // Enable only when there's text
+                onClick = { if (hasText) onSend() },
+                enabled = hasText && inputEnabled,
                 modifier = Modifier.size(32.dp)
             ) {
                 // Update send button to match input field colors

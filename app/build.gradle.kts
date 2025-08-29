@@ -52,7 +52,13 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Exclude macOS AppleDouble and dotfiles that can break AAPT on network volumes
+            excludes += listOf("**/.DS_Store", "**/._*", "**/.git/**", "**/.svn/**")
         }
+    }
+    androidResources {
+        // Instruct AAPT to ignore AppleDouble and hidden files when scanning assets/resources
+        ignoreAssetsPattern = ".*:._*:.DS_Store:.git:__MACOSX"
     }
     lint {
         baseline = file("lint-baseline.xml")

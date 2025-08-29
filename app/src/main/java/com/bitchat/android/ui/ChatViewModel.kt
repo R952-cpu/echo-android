@@ -71,6 +71,8 @@ class ChatViewModel(
     val privateChats: LiveData<Map<String, List<BitchatMessage>>> = state.privateChats
     val selectedPrivateChatPeer: LiveData<String?> = state.selectedPrivateChatPeer
     val unreadPrivateMessages: LiveData<Set<String>> = state.unreadPrivateMessages
+    val privateChatStates: LiveData<Map<String, com.bitchat.android.model.PrivateChatState>> = state.privateChatStates
+    val pendingPrivateChatRequestFrom: LiveData<String?> = state.pendingPrivateChatRequestFrom
     val joinedChannels: LiveData<Set<String>> = state.joinedChannels
     val currentChannel: LiveData<String?> = state.currentChannel
     val channelMessages: LiveData<Map<String, List<BitchatMessage>>> = state.channelMessages
@@ -176,13 +178,70 @@ class ChatViewModel(
     // MARK: - Private Chat Management (delegated)
     
     fun startPrivateChat(peerID: String) {
+        val currentState = state.getPrivateChatStatesValue()[peerID] ?: com.bitchat.android.model.PrivateChatState.NONE
+        if (currentState != com.bitchat.android.model.PrivateChatState.ACTIVE) {
+            requestPrivateChat(peerID)
+            return
+        }
         val success = privateChatManager.startPrivateChat(peerID, meshService)
         if (success) {
-            // Notify notification manager about current private chat
             setCurrentPrivateChatPeer(peerID)
-            // Clear notifications for this sender since user is now viewing the chat
             clearNotificationsForSender(peerID)
         }
+    }
+
+    fun requestPrivateChat(peerID: String) {
+        val current = state.getPrivateChatStatesValue()[peerID]
+        if (current == com.bitchat.android.model.PrivateChatState.ACTIVE || current == com.bitchat.android.model.PrivateChatState.REQUEST_SENT) return
+        if (peerID == meshService.myPeerID) return
+
+        state.setPrivateChatState(peerID, com.bitchat.android.model.PrivateChatState.REQUEST_SENT)
+        val peerName = meshService.getPeerNicknames()[peerID] ?: peerID
+        val sysMsg = BitchatMessage(
+            sender = "system",
+            content = "sent private chat request to $peerName",
+            timestamp = Date(),
+            isRelay = false
+        )
+        messageManager.addMessage(sysMsg)
+        meshService.sendPrivateChatRequest(peerID)
+    }
+
+    fun acceptPrivateChatRequest(fromPeerID: String) {
+        val current = state.getPrivateChatStatesValue()[fromPeerID]
+        if (current != com.bitchat.android.model.PrivateChatState.REQUEST_RECEIVED) return
+        state.setPrivateChatState(fromPeerID, com.bitchat.android.model.PrivateChatState.ACTIVE)
+        state.setPendingPrivateChatRequestFrom(null)
+        meshService.sendPrivateChatResponse(fromPeerID, true)
+        privateChatManager.startPrivateChat(fromPeerID, meshService)
+    }
+
+    fun declinePrivateChatRequest(fromPeerID: String) {
+        val current = state.getPrivateChatStatesValue()[fromPeerID]
+        if (current != com.bitchat.android.model.PrivateChatState.REQUEST_RECEIVED) return
+        state.setPrivateChatState(fromPeerID, com.bitchat.android.model.PrivateChatState.REJECTED)
+        state.setPendingPrivateChatRequestFrom(null)
+        meshService.sendPrivateChatResponse(fromPeerID, false)
+
+        val peerName = meshService.getPeerNicknames()[fromPeerID] ?: fromPeerID
+        val sysMsg = BitchatMessage(
+            sender = "system",
+            content = "declined private chat request from $peerName",
+            timestamp = Date(),
+            isRelay = false
+        )
+        messageManager.addMessage(sysMsg)
+    }
+
+    fun handleIncomingPrivateChatRequest(fromPeerID: String) {
+        val current = state.getPrivateChatStatesValue()[fromPeerID]
+        if (current == com.bitchat.android.model.PrivateChatState.ACTIVE) return
+        state.setPrivateChatState(fromPeerID, com.bitchat.android.model.PrivateChatState.REQUEST_RECEIVED)
+        state.setPendingPrivateChatRequestFrom(fromPeerID)
+    }
+
+    fun clearPendingPrivateChatRequest() {
+        state.setPendingPrivateChatRequestFrom(null)
     }
     
     fun endPrivateChat() {
@@ -218,6 +277,10 @@ class ChatViewModel(
         val currentChannelValue = state.getCurrentChannelValue()
         
         if (selectedPeer != null) {
+            val pmState = state.getPrivateChatStatesValue()[selectedPeer]
+            if (pmState != com.bitchat.android.model.PrivateChatState.ACTIVE) {
+                return
+            }
             // Send private message
             val recipientNickname = meshService.getPeerNicknames()[selectedPeer]
             privateChatManager.sendPrivateMessage(
@@ -390,6 +453,14 @@ class ChatViewModel(
     
     override fun didReceiveReadReceipt(receipt: ReadReceipt) {
         meshDelegateHandler.didReceiveReadReceipt(receipt)
+    }
+
+    override fun didReceivePrivateChatRequest(fromPeerID: String) {
+        meshDelegateHandler.didReceivePrivateChatRequest(fromPeerID)
+    }
+
+    override fun didReceivePrivateChatResponse(fromPeerID: String, accepted: Boolean) {
+        meshDelegateHandler.didReceivePrivateChatResponse(fromPeerID, accepted)
     }
     
     override fun decryptChannelMessage(encryptedContent: ByteArray, channel: String): String? {

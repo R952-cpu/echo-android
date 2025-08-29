@@ -44,6 +44,10 @@ fun ChatScreen(viewModel: ChatViewModel) {
     val showMentionSuggestions by viewModel.showMentionSuggestions.observeAsState(false)
     val mentionSuggestions by viewModel.mentionSuggestions.observeAsState(emptyList())
     val showAppInfo by viewModel.showAppInfo.observeAsState(false)
+    // Missing observed states used below
+    val privateChatStates by viewModel.privateChatStates.observeAsState(emptyMap())
+    val pendingPMFrom by viewModel.pendingPrivateChatRequestFrom.observeAsState(null)
+    val peerNicknames by viewModel.peerNicknames.observeAsState(emptyMap())
 
     var messageText by remember { mutableStateOf(TextFieldValue("")) }
     var showPasswordPrompt by remember { mutableStateOf(false) }
@@ -87,6 +91,10 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 modifier = Modifier.weight(1f)
             )
             // Input area - stays at bottom
+            val inputEnabled = when (val peer = selectedPrivatePeer) {
+                null -> true
+                else -> privateChatStates[peer] == com.bitchat.android.model.PrivateChatState.ACTIVE
+            }
             ChatInputSection(
                 messageText = messageText,
                 onMessageTextChange = { newText: TextFieldValue ->
@@ -121,7 +129,8 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 selectedPrivatePeer = selectedPrivatePeer,
                 currentChannel = currentChannel,
                 nickname = nickname,
-                colorScheme = colorScheme
+                colorScheme = colorScheme,
+                inputEnabled = inputEnabled
             )
         }
 
@@ -199,6 +208,14 @@ fun ChatScreen(viewModel: ChatViewModel) {
         showAppInfo = showAppInfo,
         onAppInfoDismiss = { viewModel.hideAppInfo() }
     )
+    PrivateChatRequestDialog(
+        show = pendingPMFrom != null,
+        requesterPeerID = pendingPMFrom,
+        requesterNickname = pendingPMFrom?.let { peerNicknames[it] },
+        onAccept = { pendingPMFrom?.let { viewModel.acceptPrivateChatRequest(it) } },
+        onDecline = { pendingPMFrom?.let { viewModel.declinePrivateChatRequest(it) } },
+        onDismiss = { viewModel.clearPendingPrivateChatRequest() }
+    )
 }
 
 @Composable
@@ -215,7 +232,8 @@ private fun ChatInputSection(
     selectedPrivatePeer: String?,
     currentChannel: String?,
     nickname: String,
-    colorScheme: ColorScheme
+    colorScheme: ColorScheme,
+    inputEnabled: Boolean
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -237,7 +255,8 @@ private fun ChatInputSection(
                 selectedPrivatePeer = selectedPrivatePeer,
                 currentChannel = currentChannel,
                 nickname = nickname,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                inputEnabled = inputEnabled
             )
         }
     }

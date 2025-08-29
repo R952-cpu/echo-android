@@ -124,3 +124,64 @@ fun AppInfoDialog(
         )
     }
 }
+
+@Composable
+fun PrivateChatRequestDialog(
+    show: Boolean,
+    requesterPeerID: String?,
+    requesterNickname: String?,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (show && requesterPeerID != null) {
+        val colorScheme = MaterialTheme.colorScheme
+        val name = requesterNickname ?: requesterPeerID
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Text(
+                    text = "Demande de chat privé",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "$name souhaite démarrer un chat privé. Accepter ?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colorScheme.onSurface
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onAccept) {
+                    Text(
+                        text = "Accepter",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.primary
+                    )
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = onDecline) {
+                        Text(
+                            text = "Refuser",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.error
+                        )
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            text = "Annuler",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colorScheme.onSurface
+                        )
+                    }
+                }
+            },
+            containerColor = colorScheme.surface,
+            tonalElevation = 8.dp
+        )
+    }
+}

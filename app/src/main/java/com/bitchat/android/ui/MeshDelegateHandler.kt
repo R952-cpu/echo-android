@@ -1,6 +1,4 @@
 package com.bitchat.android.ui
-
-import androidx.lifecycle.LifecycleCoroutineScope
 import com.bitchat.android.mesh.BluetoothMeshDelegate
 import com.bitchat.android.model.BitchatMessage
 import com.bitchat.android.model.DeliveryAck
@@ -112,6 +110,41 @@ class MeshDelegateHandler(
     override fun didReceiveReadReceipt(receipt: ReadReceipt) {
         coroutineScope.launch {
             messageManager.updateMessageDeliveryStatus(receipt.originalMessageID, DeliveryStatus.Read(receipt.readerNickname, receipt.timestamp))
+        }
+    }
+
+    override fun didReceivePrivateChatRequest(fromPeerID: String) {
+        coroutineScope.launch {
+            if (privateChatManager.isPeerBlocked(fromPeerID)) return@launch
+            state.setPrivateChatState(fromPeerID, com.bitchat.android.model.PrivateChatState.REQUEST_RECEIVED)
+            state.setPendingPrivateChatRequestFrom(fromPeerID)
+        }
+    }
+
+    override fun didReceivePrivateChatResponse(fromPeerID: String, accepted: Boolean) {
+        coroutineScope.launch {
+            if (accepted) {
+                state.setPrivateChatState(fromPeerID, com.bitchat.android.model.PrivateChatState.ACTIVE)
+                val peerName = state.getPeerNicknamesValue()[fromPeerID] ?: fromPeerID
+                val sysMsg = BitchatMessage(
+                    sender = "system",
+                    content = "$peerName accepted your private chat request.",
+                    timestamp = Date(),
+                    isRelay = false
+                )
+                messageManager.addMessage(sysMsg)
+                privateChatManager.startPrivateChat(fromPeerID, getMeshService())
+            } else {
+                state.setPrivateChatState(fromPeerID, com.bitchat.android.model.PrivateChatState.REJECTED)
+                val peerName = state.getPeerNicknamesValue()[fromPeerID] ?: fromPeerID
+                val sysMsg = BitchatMessage(
+                    sender = "system",
+                    content = "$peerName declined your private chat request.",
+                    timestamp = Date(),
+                    isRelay = false
+                )
+                messageManager.addMessage(sysMsg)
+            }
         }
     }
     

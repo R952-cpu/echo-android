@@ -290,6 +290,14 @@ class BluetoothMeshService(private val context: Context) {
             override fun onReadReceiptReceived(receipt: ReadReceipt) {
                 delegate?.didReceiveReadReceipt(receipt)
             }
+
+            override fun onPrivateChatRequest(senderPeerID: String) {
+                (delegate as? BluetoothMeshDelegate)?.didReceivePrivateChatRequest(senderPeerID)
+            }
+
+            override fun onPrivateChatResponse(senderPeerID: String, accepted: Boolean) {
+                (delegate as? BluetoothMeshDelegate)?.didReceivePrivateChatResponse(senderPeerID, accepted)
+            }
         }
         
         // PacketProcessor delegates
@@ -532,6 +540,19 @@ class BluetoothMeshService(private val context: Context) {
                 Log.e(TAG, "Failed to send private message: ${e.message}")
             }
         }
+    }
+
+    @JvmName("sendPrivateChatRequest")
+    fun sendPrivateChatRequest(recipientPeerID: String) {
+        val nickname = peerManager.getPeerNickname(recipientPeerID) ?: ""
+        sendPrivateMessage("__pm_request__", recipientPeerID, nickname)
+    }
+
+    @JvmName("sendPrivateChatResponse")
+    fun sendPrivateChatResponse(recipientPeerID: String, accepted: Boolean) {
+        val nickname = peerManager.getPeerNickname(recipientPeerID) ?: ""
+        val content = if (accepted) "__pm_accept__" else "__pm_deny__"
+        sendPrivateMessage(content, recipientPeerID, nickname)
     }
     
     /**
@@ -1020,4 +1041,8 @@ interface BluetoothMeshDelegate {
     fun getNickname(): String?
     fun isFavorite(peerID: String): Boolean
     // registerPeerPublicKey REMOVED - fingerprints now handled centrally in PeerManager
+
+    // Private chat consent flow
+    fun didReceivePrivateChatRequest(fromPeerID: String)
+    fun didReceivePrivateChatResponse(fromPeerID: String, accepted: Boolean)
 }
