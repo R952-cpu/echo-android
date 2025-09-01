@@ -90,7 +90,7 @@ fun formatMessageAsAnnotatedString(
 /**
  * Append formatted content with hashtag and mention highlighting
  */
-private fun appendFormattedContent(
+fun appendFormattedContent(
     builder: AnnotatedString.Builder,
     content: String,
     mentions: List<String>?,
@@ -162,4 +162,18 @@ private fun appendFormattedContent(
         builder.append(remainingText)
         builder.pop()
     }
+}
+
+/**
+ * Format only the message content (no timestamp or sender), preserving highlighting
+ */
+fun formatMessageContentOnly(
+    content: String,
+    mentions: List<String>?,
+    currentUserNickname: String,
+    colorScheme: ColorScheme
+): AnnotatedString {
+    val builder = AnnotatedString.Builder()
+    appendFormattedContent(builder, content, mentions, currentUserNickname, colorScheme)
+    return builder.toAnnotatedString()
 }

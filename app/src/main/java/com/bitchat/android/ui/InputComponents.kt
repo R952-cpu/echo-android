@@ -197,7 +197,7 @@ fun MessageInput(
             // Show placeholder when there's no text
             if (value.text.isEmpty()) {
                 Text(
-                    text = "type a message...",
+                    text = stringResource(id = R.string.message_hint),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontFamily = FontFamily.Monospace
                     ),

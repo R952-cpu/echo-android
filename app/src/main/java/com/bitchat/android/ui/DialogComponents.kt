@@ -29,7 +29,7 @@ fun PasswordPromptDialog(
             onDismissRequest = onDismiss,
             title = {
                 Text(
-                    text = "Enter Channel Password",
+                    text = "Mot de passe du canal",
                     style = MaterialTheme.typography.titleMedium,
                     color = colorScheme.onSurface
                 )
@@ -37,7 +37,7 @@ fun PasswordPromptDialog(
             text = {
                 Column {
                     Text(
-                        text = "Channel $channelName is password protected. Enter the password to join.",
+                        text = "Le canal $channelName est protégé. Entrez le mot de passe pour rejoindre.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colorScheme.onSurface
                     )
@@ -46,7 +46,7 @@ fun PasswordPromptDialog(
                     OutlinedTextField(
                         value = passwordInput,
                         onValueChange = onPasswordChange,
-                        label = { Text("Password", style = MaterialTheme.typography.bodyMedium) },
+                        label = { Text("Mot de passe", style = MaterialTheme.typography.bodyMedium) },
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             fontFamily = FontFamily.Monospace
                         ),
@@ -60,7 +60,7 @@ fun PasswordPromptDialog(
             confirmButton = {
                 TextButton(onClick = onConfirm) {
                     Text(
-                        text = "Join",
+                        text = "Rejoindre",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colorScheme.primary
                     )
@@ -69,7 +69,7 @@ fun PasswordPromptDialog(
             dismissButton = {
                 TextButton(onClick = onDismiss) {
                     Text(
-                        text = "Cancel",
+                        text = "Annuler",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colorScheme.onSurface
                     )
@@ -93,22 +93,32 @@ fun AppInfoDialog(
             onDismissRequest = onDismiss,
             title = {
                 Text(
-                    text = "About bitchat",
+                    text = "À propos d’ECHO",
                     style = MaterialTheme.typography.titleMedium,
                     color = colorScheme.onSurface
                 )
             },
             text = {
-                Text(
-                    text = "Decentralized mesh messaging over Bluetooth LE\n\n" +
-                            "• No servers or internet required\n" +
-                            "• End-to-end encrypted private messages\n" +
-                            "• Password-protected channels\n" +
-                            "• Store-and-forward for offline peers\n\n" +
-                            "Triple-click title to emergency clear all data",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colorScheme.onSurface
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Messagerie maillée (Bluetooth LE), sans serveur.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onSurface
+                    )
+                    Text(
+                        text = "• Messages privés chiffrés de bout en bout\n" +
+                                "• Canaux protégés par mot de passe\n" +
+                                "• Relais/Store‑and‑forward pour pairs hors‑ligne\n" +
+                                "• Notifications et effacement d’urgence (triple‑tap)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Nostr: hors mesh, les MP peuvent être relayés. Les messages restent chiffrés; aucun relais ne voit le contenu.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurface.copy(alpha = 0.85f)
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = onDismiss) {
@@ -123,6 +133,51 @@ fun AppInfoDialog(
             tonalElevation = 8.dp
         )
     }
+}
+
+@Composable
+fun MyNostrDialog(
+    show: Boolean,
+    npub: String?,
+    onCopy: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (!show) return
+    val colorScheme = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Mon Nostr",
+                style = MaterialTheme.typography.titleMedium,
+                color = colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = npub ?: "Identité non initialisée",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colorScheme.onSurface
+                )
+                Text(
+                    text = "Copiez votre npub pour le partager. (QR à venir)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurface.copy(alpha = 0.85f)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onCopy) {
+                Text("Copier", style = MaterialTheme.typography.bodyMedium, color = colorScheme.primary)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Fermer", style = MaterialTheme.typography.bodyMedium) }
+        },
+        containerColor = colorScheme.surface,
+        tonalElevation = 8.dp
+    )
 }
 
 @Composable

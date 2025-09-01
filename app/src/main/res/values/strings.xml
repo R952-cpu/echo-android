@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">bitchat</string>
+    <string name="app_name">ECHO</string>
     <string name="permission_bluetooth_rationale">Bluetooth permission is required for peer-to-peer messaging without internet.</string>
     <string name="permission_location_rationale">Location permission is required to discover nearby devices via Bluetooth.</string>
     <string name="permission_notification_rationale">Notification permission is required to alert you of new messages.</string>
-    <string name="nickname_hint">nickname</string>
-    <string name="message_hint">type a message…</string>
-    <string name="channel_password_hint">Password</string>
-    <string name="join_channel">Join Channel</string>
-    <string name="leave_channel">Leave</string>
-    <string name="send_message">Send</string>
-    <string name="show_commands">Show commands</string>
-    <string name="back">Back</string>
-    <string name="people">People</string>
-    <string name="channels">Channels</string>
-    <string name="online_users">Online Users</string>
-    <string name="no_one_connected">No one connected</string>
-    <string name="emergency_clear_hint">Triple tap to clear all data</string>
-    <string name="your_network">Network</string>
+    <string name="nickname_hint">pseudo</string>
+    <string name="message_hint">écrire un message…</string>
+    <string name="channel_password_hint">Mot de passe</string>
+    <string name="join_channel">Rejoindre le canal</string>
+    <string name="leave_channel">Quitter</string>
+    <string name="send_message">Envoyer</string>
+    <string name="show_commands">Afficher les commandes</string>
+    <string name="back">Retour</string>
+    <string name="people">autour de moi</string>
+    <string name="channels">Canaux</string>
+    <string name="online_users">Utilisateurs en ligne</string>
+    <string name="no_one_connected">personne autour…</string>
+    <string name="emergency_clear_hint">Triple tape pour effacer toutes les données</string>
+    <string name="your_network">Réseau</string>
     
     <!-- Battery Optimization Strings -->
     <string name="battery_optimization_detected">Battery Optimization Detected</string>

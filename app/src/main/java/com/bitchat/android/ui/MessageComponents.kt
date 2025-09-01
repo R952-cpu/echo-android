@@ -18,6 +18,10 @@ import androidx.compose.ui.unit.sp
 import com.bitchat.android.model.BitchatMessage
 import com.bitchat.android.model.DeliveryStatus
 import com.bitchat.android.mesh.BluetoothMeshService
+import com.bitchat.android.ui.components.ChatBubble
+import com.bitchat.android.ui.components.LinkPreviewCard
+import com.bitchat.android.ui.components.BoardNoticeCard
+import com.bitchat.android.ui.theme.LocalEcho
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -46,7 +50,7 @@ fun MessagesList(
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             items(messages) { message ->
                 MessageItem(
@@ -66,32 +70,44 @@ fun MessageItem(
     meshService: BluetoothMeshService
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-    
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
-    ) {
-        // Single text view for natural wrapping (like iOS)
-        Text(
-            text = formatMessageAsAnnotatedString(
-                message = message,
-                currentUserNickname = currentUserNickname,
-                meshService = meshService,
-                colorScheme = colorScheme,
-                timeFormatter = timeFormatter
-            ),
-            modifier = Modifier.weight(1f),
-            fontFamily = FontFamily.Monospace,
-            softWrap = true,
-            overflow = TextOverflow.Visible
+    if (message.sender == "system") {
+        BoardNoticeCard(text = message.content)
+        return
+    }
+
+    val isMe = message.senderPeerID == meshService.myPeerID || message.sender == currentUserNickname
+    val showSenderAbove = !message.isPrivate && !isMe
+    val content = formatMessageContentOnly(
+        content = message.content,
+        mentions = message.mentions,
+        currentUserNickname = currentUserNickname,
+        colorScheme = colorScheme
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        ChatBubble(
+            senderName = if (isMe) currentUserNickname else message.sender,
+            content = content,
+            isMe = isMe,
+            showSenderName = showSenderAbove,
+            deliveryStatus = if (message.isPrivate && isMe) message.deliveryStatus else null
         )
-        
-        // Delivery status for private messages
-        if (message.isPrivate && message.sender == currentUserNickname) {
-            message.deliveryStatus?.let { status ->
-                DeliveryStatusIcon(status = status)
+
+        // Simple URL detection to show a translucent preview card (UI-only)
+        val urlRegex = remember {
+            Regex("(https?://[a-zA-Z0-9\\-._~:/?#[@!$&'()*+,;=%]+)")
+        }
+        val firstUrl = remember(message.content) { urlRegex.find(message.content)?.value }
+        if (firstUrl != null) {
+            val tokens = LocalEcho.current
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
+            ) {
+                Box(modifier = Modifier.fillMaxWidth(tokens.bubbleWidthRatio)) {
+                    LinkPreviewCard(url = firstUrl)
+                }
             }
         }
     }

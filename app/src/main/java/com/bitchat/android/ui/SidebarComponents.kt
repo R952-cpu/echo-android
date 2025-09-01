@@ -17,6 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+import com.bitchat.android.ui.components.UnifiedSearchBar
+import com.bitchat.android.ui.components.NostrInfoCard
+import com.bitchat.android.ui.components.LinkPreviewCard
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,6 +80,26 @@ fun SidebarOverlay(
                 SidebarHeader()
 
                 HorizontalDivider()
+                // Unified search bar + quick detection (URL / npub)
+                var searchQuery by remember { mutableStateOf("") }
+                UnifiedSearchBar(onQueryChange = { q -> searchQuery = q })
+                val urlMatch = remember(searchQuery) {
+                    Regex("(https?://[a-zA-Z0-9\\-._~:/?#@!$&'()*+,;=%]+)").find(searchQuery)?.value
+                }
+                val npubMatch = remember(searchQuery) {
+                    Regex("(?i)npub[0-9a-z]+", RegexOption.IGNORE_CASE).find(searchQuery)?.value
+                }
+                val context = LocalContext.current
+                if (npubMatch != null) {
+                    NostrInfoCard(npub = npubMatch) {
+                        val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("npub", npubMatch))
+                    }
+                } else if (urlMatch != null) {
+                    Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                        LinkPreviewCard(url = urlMatch)
+                    }
+                }
                 
                 // Scrollable content
                 LazyColumn(

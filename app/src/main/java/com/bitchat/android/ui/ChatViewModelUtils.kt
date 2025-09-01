@@ -1,5 +1,6 @@
 package com.bitchat.android.ui
 
+
 /**
  * Utility functions for the ChatViewModel.
  * Implemented via reflection only to avoid hard Android imports that can

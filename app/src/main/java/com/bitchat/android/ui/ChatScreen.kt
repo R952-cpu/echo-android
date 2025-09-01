@@ -14,6 +14,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalContext
+import com.bitchat.android.ui.components.EchoHairlineDivider
+import com.bitchat.android.ui.theme.LocalEcho
 
 /**
  * Main ChatScreen - REFACTORED to use component-based architecture
@@ -44,6 +47,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
     val showMentionSuggestions by viewModel.showMentionSuggestions.observeAsState(false)
     val mentionSuggestions by viewModel.mentionSuggestions.observeAsState(emptyList())
     val showAppInfo by viewModel.showAppInfo.observeAsState(false)
+    var showMyNostr by remember { mutableStateOf(false) }
     // Missing observed states used below
     val privateChatStates by viewModel.privateChatStates.observeAsState(emptyMap())
     val pendingPMFrom by viewModel.pendingPrivateChatRequestFrom.observeAsState(null)
@@ -70,14 +74,19 @@ fun ChatScreen(viewModel: ChatViewModel) {
     }
 
     // Use WindowInsets to handle keyboard properly
-    Box(modifier = Modifier.fillMaxSize()) {
+    val tokens = LocalEcho.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(tokens.appBackground)
+    ) {
         val headerHeight = 42.dp
         
         // Main content area that responds to keyboard/window insets
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(colorScheme.background)
+                .background(tokens.chatBackground)
                 .windowInsetsPadding(WindowInsets.ime) // This handles keyboard insets
         ) {
             // Header spacer - creates space for the floating header
@@ -90,6 +99,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 meshService = viewModel.meshService,
                 modifier = Modifier.weight(1f)
             )
+            EchoHairlineDivider()
             // Input area - stays at bottom
             val inputEnabled = when (val peer = selectedPrivatePeer) {
                 null -> true
@@ -144,6 +154,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
             colorScheme = colorScheme,
             onSidebarToggle = { viewModel.showSidebar() },
             onShowAppInfo = { viewModel.showAppInfo() },
+            onShowMyNostr = { showMyNostr = true },
             onPanicClear = { viewModel.panicClearAllData() }
         )
 
@@ -207,6 +218,22 @@ fun ChatScreen(viewModel: ChatViewModel) {
         },
         showAppInfo = showAppInfo,
         onAppInfoDismiss = { viewModel.hideAppInfo() }
+    )
+    // My Nostr dialog (lazy init when shown)
+    val context = LocalContext.current
+    val npub: String? = if (showMyNostr) {
+        remember(showMyNostr) { com.bitchat.android.identity.NostrIdentityManager.getInstance(context).getOrCreateNpub() }
+    } else null
+    MyNostrDialog(
+        show = showMyNostr,
+        npub = npub,
+        onCopy = {
+            npub?.let {
+                val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("npub", it))
+            }
+        },
+        onDismiss = { showMyNostr = false }
     )
     PrivateChatRequestDialog(
         show = pendingPMFrom != null,
@@ -273,17 +300,22 @@ private fun ChatFloatingHeader(
     colorScheme: ColorScheme,
     onSidebarToggle: () -> Unit,
     onShowAppInfo: () -> Unit,
+    onShowMyNostr: () -> Unit,
     onPanicClear: () -> Unit
 ) {
+    val tokens = LocalEcho.current
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .height(headerHeight)
             .zIndex(1f)
             .windowInsetsPadding(WindowInsets.statusBars), // Only respond to status bar
-        color = colorScheme.background.copy(alpha = 0.95f),
+        color = Color.Transparent,
         shadowElevation = 8.dp
     ) {
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .background(tokens.headerBackground))
         TopAppBar(
             title = {
                 ChatHeaderContent(
@@ -299,7 +331,8 @@ private fun ChatFloatingHeader(
                     },
                     onSidebarClick = onSidebarToggle,
                     onTripleClick = onPanicClear,
-                    onShowAppInfo = onShowAppInfo
+                    onShowAppInfo = onShowAppInfo,
+                    onShowMyNostr = onShowMyNostr
                 )
             },
             colors = TopAppBarDefaults.topAppBarColors(
@@ -309,13 +342,12 @@ private fun ChatFloatingHeader(
     }
 
     // Divider under header
-    HorizontalDivider(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .offset(y = headerHeight)
-            .zIndex(1f),
-        color = colorScheme.outline.copy(alpha = 0.3f)
-    )
+            .zIndex(1f)
+    ) { EchoHairlineDivider() }
 }
 
 @Composable

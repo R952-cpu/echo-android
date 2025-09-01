@@ -23,6 +23,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bitchat.android.core.ui.utils.singleOrTripleClickable
+import androidx.compose.ui.res.stringResource
+import com.bitchat.android.R
 
 /**
  * Header components for ChatScreen
@@ -201,7 +203,8 @@ fun ChatHeaderContent(
     onBackClick: () -> Unit,
     onSidebarClick: () -> Unit,
     onTripleClick: () -> Unit,
-    onShowAppInfo: () -> Unit
+    onShowAppInfo: () -> Unit,
+    onShowMyNostr: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
@@ -249,6 +252,7 @@ fun ChatHeaderContent(
                 onTitleClick = onShowAppInfo,
                 onTripleTitleClick = onTripleClick,
                 onSidebarClick = onSidebarClick,
+                onShowMyNostr = onShowMyNostr,
                 viewModel = viewModel
             )
         }
@@ -291,7 +295,7 @@ private fun PrivateChatHeader(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "back",
+                    text = stringResource(id = R.string.back).lowercase(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = colorScheme.primary
                 )
@@ -379,7 +383,7 @@ private fun ChannelHeader(
         
         // Title - perfectly centered regardless of other elements
         Text(
-            text = "channel: $channel",
+            text = "# $channel",
             style = MaterialTheme.typography.titleMedium,
             color = Color(0xFFFF9500), // Orange to match input field
             modifier = Modifier
@@ -393,7 +397,7 @@ private fun ChannelHeader(
             modifier = Modifier.align(Alignment.CenterEnd)
         ) {
             Text(
-                text = "leave",
+                text = stringResource(id = R.string.leave_channel).lowercase(),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Red
             )
@@ -408,6 +412,7 @@ private fun MainHeader(
     onTitleClick: () -> Unit,
     onTripleTitleClick: () -> Unit,
     onSidebarClick: () -> Unit,
+    onShowMyNostr: () -> Unit,
     viewModel: ChatViewModel
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -427,7 +432,7 @@ private fun MainHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "bitchat/",
+                text = "ECHO/",
                 style = MaterialTheme.typography.headlineSmall,
                 color = colorScheme.primary,
                 modifier = Modifier.singleOrTripleClickable(
@@ -435,6 +440,14 @@ private fun MainHeader(
                     onTripleClick = onTripleTitleClick
                 )
             )
+            Spacer(modifier = Modifier.width(6.dp))
+            IconButton(onClick = onShowMyNostr, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    imageVector = Icons.Outlined.VpnKey,
+                    contentDescription = "Mon Nostr",
+                    tint = Color(0xFFFF9500)
+                )
+            }
             
             Spacer(modifier = Modifier.width(2.dp))
             

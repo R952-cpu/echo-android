@@ -35,6 +35,7 @@ class ChatViewModel(
     // Specialized managers
     private val dataManager = DataManager(application.applicationContext)
     private val messageManager = MessageManager(state)
+    private val messageRouter = MessageRouter(meshService)
     private val channelManager = ChannelManager(state, messageManager, dataManager, viewModelScope)
     
     // Create Noise session delegate for clean dependency injection
@@ -327,7 +328,7 @@ class ChatViewModel(
                 state.getNicknameValue(),
                 meshService.myPeerID
             ) { messageContent, peerID, recipientNicknameParam, messageId ->
-                meshService.sendPrivateMessage(messageContent, peerID, recipientNicknameParam, messageId)
+                messageRouter.sendPrivate(messageContent, peerID, recipientNicknameParam, messageId)
             }
         } else {
             // Send public/channel message
@@ -354,20 +355,20 @@ class ChatViewModel(
                         meshService.myPeerID,
                         onEncryptedPayload = { encryptedData ->
                             // This would need proper mesh service integration
-                            meshService.sendMessage(content, mentions, currentChannelValue)
-                        },
-                        onFallback = {
-                            meshService.sendMessage(content, mentions, currentChannelValue)
-                        }
-                    )
-                } else {
-                    meshService.sendMessage(content, mentions, currentChannelValue)
+                    messageRouter.sendPublic(content, mentions, currentChannelValue)
+                },
+                onFallback = {
+                    messageRouter.sendPublic(content, mentions, currentChannelValue)
                 }
-            } else {
-                messageManager.addMessage(message)
-                meshService.sendMessage(content, mentions, null)
-            }
+            )
+        } else {
+            messageRouter.sendPublic(content, mentions, currentChannelValue)
         }
+    } else {
+        messageManager.addMessage(message)
+        messageRouter.sendPublic(content, mentions, null)
+    }
+}
     }
     
     // MARK: - Utility Functions
