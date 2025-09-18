@@ -6,48 +6,54 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Typography matching the iOS monospace design - increased font sizes for better readability
+// Rounded, human friendly typography that mirrors the iOS design tokens.
 val Typography = Typography(
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Monospace,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 22.sp
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 18.sp
-    ),
-    bodySmall = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp
-    ),
-    headlineSmall = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium,
         fontSize = 18.sp,
         lineHeight = 24.sp
     ),
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Medium,
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 22.sp
     ),
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.Monospace,
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp
+    ),
+    titleMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
+        fontSize = 17.sp,
+        lineHeight = 22.sp
+    ),
+    labelLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
         lineHeight = 18.sp
     ),
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Medium,
+        fontSize = 13.sp,
+        lineHeight = 16.sp
+    ),
     labelSmall = TextStyle(
-        fontFamily = FontFamily.Monospace,
+        fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
         fontSize = 11.sp,
-        lineHeight = 16.sp
+        lineHeight = 14.sp
     )
 )

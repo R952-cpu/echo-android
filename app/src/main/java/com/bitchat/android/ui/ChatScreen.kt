@@ -2,18 +2,43 @@ package com.bitchat.android.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
+import com.bitchat.android.model.PrivateChatState
+import com.bitchat.android.ui.theme.EchoBrushes
+import com.bitchat.android.ui.theme.EchoMetrics
 
 /**
  * Main ChatScreen - REFACTORED to use component-based architecture
@@ -27,15 +52,10 @@ import androidx.compose.ui.zIndex
  */
 @Composable
 fun ChatScreen(viewModel: ChatViewModel) {
-    val colorScheme = MaterialTheme.colorScheme
     val messages by viewModel.messages.observeAsState(emptyList())
-    val connectedPeers by viewModel.connectedPeers.observeAsState(emptyList())
     val nickname by viewModel.nickname.observeAsState("")
     val selectedPrivatePeer by viewModel.selectedPrivateChatPeer.observeAsState()
     val currentChannel by viewModel.currentChannel.observeAsState()
-    val joinedChannels by viewModel.joinedChannels.observeAsState(emptySet())
-    val hasUnreadChannels by viewModel.unreadChannelMessages.observeAsState(emptyMap())
-    val hasUnreadPrivateMessages by viewModel.unreadPrivateMessages.observeAsState(emptySet())
     val privateChats by viewModel.privateChats.observeAsState(emptyMap())
     val channelMessages by viewModel.channelMessages.observeAsState(emptyMap())
     val showSidebar by viewModel.showSidebar.observeAsState(false)
@@ -44,22 +64,22 @@ fun ChatScreen(viewModel: ChatViewModel) {
     val showMentionSuggestions by viewModel.showMentionSuggestions.observeAsState(false)
     val mentionSuggestions by viewModel.mentionSuggestions.observeAsState(emptyList())
     val showAppInfo by viewModel.showAppInfo.observeAsState(false)
-    // Missing observed states used below
-    val privateChatStates by viewModel.privateChatStates.observeAsState(emptyMap())
+    val isStaff by viewModel.isStaff.observeAsState(false)
+    val privateChatStates by viewModel.privateChatStates.observeAsState(emptyMap<String, PrivateChatState>())
     val pendingPMFrom by viewModel.pendingPrivateChatRequestFrom.observeAsState(null)
     val peerNicknames by viewModel.peerNicknames.observeAsState(emptyMap())
+    val showPasswordPrompt by viewModel.showPasswordPrompt.observeAsState(false)
 
     var messageText by remember { mutableStateOf(TextFieldValue("")) }
-    var showPasswordPrompt by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var passwordInput by remember { mutableStateOf("") }
+    var showStaffDialog by remember { mutableStateOf(false) }
 
     // Show password dialog when needed
     LaunchedEffect(showPasswordPrompt) {
         showPasswordDialog = showPasswordPrompt
     }
 
-    val isConnected by viewModel.isConnected.observeAsState(false)
     val passwordPromptChannel by viewModel.passwordPromptChannel.observeAsState(null)
 
     // Determine what messages to show
@@ -69,15 +89,20 @@ fun ChatScreen(viewModel: ChatViewModel) {
         else -> messages
     }
 
+    val darkTheme = isSystemInDarkTheme()
+
     // Use WindowInsets to handle keyboard properly
-    Box(modifier = Modifier.fillMaxSize()) {
-        val headerHeight = 42.dp
-        
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(EchoBrushes.appBackground(darkTheme))
+    ) {
+        val headerHeight = EchoMetrics.HeaderHeight
+
         // Main content area that responds to keyboard/window insets
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(colorScheme.background)
                 .windowInsetsPadding(WindowInsets.ime) // This handles keyboard insets
         ) {
             // Header spacer - creates space for the floating header
@@ -91,9 +116,15 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 modifier = Modifier.weight(1f)
             )
             // Input area - stays at bottom
+            val isMainTimeline = selectedPrivatePeer == null && currentChannel == null
+            val timelineLocked = isMainTimeline && !isStaff
             val inputEnabled = when (val peer = selectedPrivatePeer) {
-                null -> true
-                else -> privateChatStates[peer] == com.bitchat.android.model.PrivateChatState.ACTIVE
+                null -> !timelineLocked
+                else -> privateChatStates[peer] == PrivateChatState.ACTIVE
+            }
+            val readOnlyHint = when {
+                timelineLocked -> "Lecture seule : triple-tapez sur \"ECHO\" et saisissez le code STAFF pour écrire."
+                else -> null
             }
             ChatInputSection(
                 messageText = messageText,
@@ -129,8 +160,8 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 selectedPrivatePeer = selectedPrivatePeer,
                 currentChannel = currentChannel,
                 nickname = nickname,
-                colorScheme = colorScheme,
-                inputEnabled = inputEnabled
+                inputEnabled = inputEnabled,
+                readOnlyHint = readOnlyHint
             )
         }
 
@@ -141,9 +172,9 @@ fun ChatScreen(viewModel: ChatViewModel) {
             currentChannel = currentChannel,
             nickname = nickname,
             viewModel = viewModel,
-            colorScheme = colorScheme,
             onSidebarToggle = { viewModel.showSidebar() },
             onShowAppInfo = { viewModel.showAppInfo() },
+            onShowStaffSheet = { showStaffDialog = true },
             onPanicClear = { viewModel.panicClearAllData() }
         )
 
@@ -187,6 +218,11 @@ fun ChatScreen(viewModel: ChatViewModel) {
     }
 
     // Dialogs
+    StaffCodeDialog(
+        visible = showStaffDialog,
+        onDismiss = { showStaffDialog = false },
+        onActivate = { code -> viewModel.activateStaff(code) }
+    )
     ChatDialogs(
         showPasswordDialog = showPasswordDialog,
         passwordPromptChannel = passwordPromptChannel,
@@ -198,12 +234,14 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 if (success) {
                     showPasswordDialog = false
                     passwordInput = ""
+                    viewModel.dismissPasswordPrompt()
                 }
             }
         },
         onPasswordDismiss = {
             showPasswordDialog = false
             passwordInput = ""
+            viewModel.dismissPasswordPrompt()
         },
         showAppInfo = showAppInfo,
         onAppInfoDismiss = { viewModel.hideAppInfo() }
@@ -232,21 +270,31 @@ private fun ChatInputSection(
     selectedPrivatePeer: String?,
     currentChannel: String?,
     nickname: String,
-    colorScheme: ColorScheme,
-    inputEnabled: Boolean
+    inputEnabled: Boolean,
+    readOnlyHint: String?
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = colorScheme.background,
-        shadowElevation = 8.dp
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 8.dp,
+        shadowElevation = 12.dp
     ) {
-        Column {
-            HorizontalDivider(color = colorScheme.outline.copy(alpha = 0.3f))
-            // Command suggestions box
+        Column(modifier = Modifier.padding(top = 12.dp, bottom = 16.dp)) {
+            if (showMentionSuggestions && mentionSuggestions.isNotEmpty()) {
+                MentionSuggestionPanel(
+                    suggestions = mentionSuggestions,
+                    onSuggestionClick = onMentionSuggestionClick
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-            
-            // Mention suggestions box
-
+            if (showCommandSuggestions && commandSuggestions.isNotEmpty()) {
+                CommandSuggestionPanel(
+                    suggestions = commandSuggestions,
+                    onSuggestionClick = onCommandSuggestionClick
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             MessageInput(
                 value = messageText,
@@ -254,11 +302,106 @@ private fun ChatInputSection(
                 onSend = onSend,
                 selectedPrivatePeer = selectedPrivatePeer,
                 currentChannel = currentChannel,
-                nickname = nickname,
-                modifier = Modifier.fillMaxWidth(),
-                inputEnabled = inputEnabled
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                inputEnabled = inputEnabled,
+                readOnlyHint = readOnlyHint
             )
         }
+    }
+}
+
+@Composable
+private fun MentionSuggestionPanel(
+    suggestions: List<String>,
+    onSuggestionClick: (String) -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+    ) {
+        Column {
+            suggestions.take(4).forEachIndexed { index, suggestion ->
+                Text(
+                    text = "@${suggestion}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSuggestionClick(suggestion) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                )
+                if (index != minOf(3, suggestions.size - 1)) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommandSuggestionPanel(
+    suggestions: List<CommandSuggestion>,
+    onSuggestionClick: (CommandSuggestion) -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+    ) {
+        Column {
+            suggestions.forEachIndexed { index, suggestion ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSuggestionClick(suggestion) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = buildCommandLabel(suggestion),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    suggestion.syntax?.let { syntax ->
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = syntax,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = suggestion.description,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+                if (index != suggestions.lastIndex) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                }
+            }
+        }
+    }
+}
+
+private fun buildCommandLabel(suggestion: CommandSuggestion): String {
+    return if (suggestion.aliases.isEmpty()) {
+        suggestion.command
+    } else {
+        (listOf(suggestion.command) + suggestion.aliases).joinToString(separator = ", ")
     }
 }
 
@@ -270,42 +413,51 @@ private fun ChatFloatingHeader(
     currentChannel: String?,
     nickname: String,
     viewModel: ChatViewModel,
-    colorScheme: ColorScheme,
     onSidebarToggle: () -> Unit,
     onShowAppInfo: () -> Unit,
+    onShowStaffSheet: () -> Unit,
     onPanicClear: () -> Unit
 ) {
+    val darkTheme = isSystemInDarkTheme()
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .height(headerHeight)
             .zIndex(1f)
             .windowInsetsPadding(WindowInsets.statusBars), // Only respond to status bar
-        color = colorScheme.background.copy(alpha = 0.95f),
-        shadowElevation = 8.dp
+        color = Color.Transparent,
+        shadowElevation = 12.dp
     ) {
-        TopAppBar(
-            title = {
-                ChatHeaderContent(
-                    selectedPrivatePeer = selectedPrivatePeer,
-                    currentChannel = currentChannel,
-                    nickname = nickname,
-                    viewModel = viewModel,
-                    onBackClick = {
-                        when {
-                            selectedPrivatePeer != null -> viewModel.endPrivateChat()
-                            currentChannel != null -> viewModel.switchToChannel(null)
-                        }
-                    },
-                    onSidebarClick = onSidebarToggle,
-                    onTripleClick = onPanicClear,
-                    onShowAppInfo = onShowAppInfo
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(EchoBrushes.headerBackground(darkTheme))
+        ) {
+            TopAppBar(
+                title = {
+                    ChatHeaderContent(
+                        selectedPrivatePeer = selectedPrivatePeer,
+                        currentChannel = currentChannel,
+                        nickname = nickname,
+                        viewModel = viewModel,
+                        onBackClick = {
+                            when {
+                                selectedPrivatePeer != null -> viewModel.endPrivateChat()
+                                currentChannel != null -> viewModel.switchToChannel(null)
+                            }
+                        },
+                        onSidebarClick = onSidebarToggle,
+                        onShowStaffSheet = onShowStaffSheet,
+                        onPanicClear = onPanicClear,
+                        onShowAppInfo = onShowAppInfo
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
                 )
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color.Transparent
             )
-        )
+        }
     }
 
     // Divider under header
@@ -314,7 +466,7 @@ private fun ChatFloatingHeader(
             .fillMaxWidth()
             .offset(y = headerHeight)
             .zIndex(1f),
-        color = colorScheme.outline.copy(alpha = 0.3f)
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
     )
 }
 

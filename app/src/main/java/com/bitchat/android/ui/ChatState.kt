@@ -32,9 +32,12 @@ class ChatState {
     
     private val _nickname = MutableLiveData<String>()
     val nickname: LiveData<String> = _nickname
-    
+
     private val _isConnected = MutableLiveData<Boolean>(false)
     val isConnected: LiveData<Boolean> = _isConnected
+
+    private val _isStaff = MutableLiveData(false)
+    val isStaff: LiveData<Boolean> = _isStaff
     
     // Private chats
     private val _privateChats = MutableLiveData<Map<String, List<BitchatMessage>>>(emptyMap())
@@ -135,6 +138,7 @@ class ChatState {
     fun getMessagesValue() = _messages.value ?: emptyList()
     fun getConnectedPeersValue() = _connectedPeers.value ?: emptyList()
     fun getNicknameValue() = _nickname.value
+    fun getIsStaffValue() = _isStaff.value ?: false
     fun getPrivateChatsValue() = _privateChats.value ?: emptyMap()
     fun getSelectedPrivateChatPeerValue() = _selectedPrivateChatPeer.value
     fun getUnreadPrivateMessagesValue() = _unreadPrivateMessages.value ?: emptySet()
@@ -170,9 +174,13 @@ class ChatState {
     fun setNickname(nickname: String) {
         _nickname.value = nickname
     }
-    
+
     fun setIsConnected(connected: Boolean) {
         _isConnected.value = connected
+    }
+
+    fun setIsStaff(value: Boolean) {
+        _isStaff.value = value
     }
     
     fun setPrivateChats(chats: Map<String, List<BitchatMessage>>) {

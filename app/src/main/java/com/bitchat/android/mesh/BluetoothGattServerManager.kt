@@ -1,12 +1,14 @@
 package com.bitchat.android.mesh
 
 import android.bluetooth.*
+import android.annotation.SuppressLint
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.Context
 import android.os.ParcelUuid
+import android.os.Build
 import android.util.Log
 import com.bitchat.android.protocol.BitchatPacket
 import kotlinx.coroutines.CoroutineScope
@@ -55,6 +57,13 @@ class BluetoothGattServerManager(
         if (!permissionManager.hasBluetoothPermissions()) {
             Log.e(TAG, "Missing Bluetooth permissions")
             return false
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnect = permissionManager.hasConnectPermission()
+            if (!hasConnect) {
+                Log.w(TAG, "BLUETOOTH_CONNECT not granted; cannot access adapter/server safely")
+                return false
+            }
         }
         
         if (bluetoothAdapter?.isEnabled != true) {
@@ -109,6 +118,7 @@ class BluetoothGattServerManager(
      * Setup GATT server with proper sequencing
      */
     @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
     private fun setupGattServer() {
         if (!permissionManager.hasBluetoothPermissions()) return
         
@@ -223,7 +233,13 @@ class BluetoothGattServerManager(
                 }
                 
                 if (responseNeeded) {
-                    gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
+                    try {
+                        gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
+                    } catch (se: SecurityException) {
+                        Log.w(TAG, "sendResponse denied by security policy", se)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to send GATT response: ${e.message}")
+                    }
                 }
             }
         }
@@ -246,8 +262,20 @@ class BluetoothGattServerManager(
             return
         }
         
-        // Create new server
-        gattServer = bluetoothManager.openGattServer(context, serverCallback)
+        // Create new server (requires BLUETOOTH_CONNECT on Android 12+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !permissionManager.hasConnectPermission()) {
+            Log.w(TAG, "Missing BLUETOOTH_CONNECT permission, cannot open GATT server")
+            return
+        }
+        try {
+            gattServer = bluetoothManager.openGattServer(context, serverCallback)
+        } catch (se: SecurityException) {
+            Log.e(TAG, "openGattServer denied by security policy", se)
+            return
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open GATT server: ${e.message}")
+            return
+        }
         
         // Create characteristic with notification support
         characteristic = BluetoothGattCharacteristic(
@@ -269,7 +297,18 @@ class BluetoothGattServerManager(
         val service = BluetoothGattService(SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
         service.addCharacteristic(characteristic)
         
-        gattServer?.addService(service)
+        // Add service (requires BLUETOOTH_CONNECT on Android 12+)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || permissionManager.hasConnectPermission()) {
+            try {
+                gattServer?.addService(service)
+            } catch (se: SecurityException) {
+                Log.e(TAG, "addService denied by security policy", se)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add GATT service: ${e.message}")
+            }
+        } else {
+            Log.w(TAG, "Missing BLUETOOTH_CONNECT permission, cannot add GATT service")
+        }
         
         Log.i(TAG, "GATT server setup complete")
     }
@@ -278,9 +317,15 @@ class BluetoothGattServerManager(
      * Start advertising
      */
     @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
     private fun startAdvertising() {
-        if (!permissionManager.hasBluetoothPermissions() || bleAdvertiser == null || !isActive || bluetoothAdapter == null || !bluetoothAdapter.isMultipleAdvertisementSupported()) {
-            throw Exception("Missing Bluetooth permissions or BLE advertiser not available")
+        if (!permissionManager.hasBluetoothPermissions() || bleAdvertiser == null || !isActive || bluetoothAdapter == null) {
+            Log.e(TAG, "Cannot start advertising: missing permissions or BLE advertiser/adapter not available")
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !permissionManager.hasAdvertisePermission()) {
+            Log.w(TAG, "Missing BLUETOOTH_ADVERTISE permission, cannot start advertising")
+            return
         }
 
         val settings = powerManager.getAdvertiseSettings()
@@ -303,6 +348,8 @@ class BluetoothGattServerManager(
         
         try {
             bleAdvertiser.startAdvertising(settings, data, advertiseCallback)
+        } catch (se: SecurityException) {
+            Log.e(TAG, "startAdvertising denied by security policy", se)
         } catch (e: Exception) {
             Log.e(TAG, "Exception starting advertising: ${e.message}")
         }
@@ -312,6 +359,7 @@ class BluetoothGattServerManager(
      * Stop advertising
      */
     @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
     private fun stopAdvertising() {
         if (!permissionManager.hasBluetoothPermissions() || bleAdvertiser == null) return
         try {

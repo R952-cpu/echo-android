@@ -45,6 +45,16 @@ class DataManager(private val context: Context) {
     fun saveNickname(nickname: String) {
         prefs.edit().putString("nickname", nickname).apply()
     }
+
+    // MARK: - Staff access management
+
+    fun isStaff(): Boolean = StaffAuth.isStaff(prefs)
+
+    fun activateStaff(code: String): Boolean = StaffAuth.activate(prefs, code)
+
+    fun deactivateStaff() {
+        StaffAuth.deactivate(prefs)
+    }
     
     // MARK: - Channel Data Management
     

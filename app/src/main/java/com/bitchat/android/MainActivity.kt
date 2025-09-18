@@ -362,7 +362,15 @@ class MainActivity : ComponentActivity() {
      */
     private fun checkLocationAndProceed() {
         Log.d("MainActivity", "Checking location services status")
-        
+
+        // On Android 12+ (API 31+), with BLUETOOTH_SCAN using neverForLocation,
+        // Location Services are not required for BLE scanning. Skip gating.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            Log.d("MainActivity", "API >= 31: skipping location services gating for BLE scan")
+            checkBatteryOptimizationAndProceed()
+            return
+        }
+
         // For first-time users, skip location check and go straight to permissions
         // We'll check location after permissions are granted
         if (permissionManager.isFirstTimeLaunch()) {

@@ -93,6 +93,7 @@ class ChatViewModel(
     val peerNicknames: LiveData<Map<String, String>> = state.peerNicknames
     val peerRSSI: LiveData<Map<String, Int>> = state.peerRSSI
     val showAppInfo: LiveData<Boolean> = state.showAppInfo
+    val isStaff: LiveData<Boolean> = state.isStaff
     
     init {
         // Note: Mesh service delegate is now set by MainActivity
@@ -103,6 +104,9 @@ class ChatViewModel(
         // Load nickname
         val nickname = dataManager.loadNickname()
         state.setNickname(nickname)
+
+        // Load staff flag
+        state.setIsStaff(dataManager.isStaff())
         
         // Load data
         val (joinedChannels, protectedChannels) = channelManager.loadChannelData()
@@ -165,7 +169,11 @@ class ChatViewModel(
     fun joinChannel(channel: String, password: String? = null): Boolean {
         return channelManager.joinChannel(channel, password, meshService.myPeerID)
     }
-    
+
+    fun dismissPasswordPrompt() {
+        channelManager.hidePasswordPrompt()
+    }
+
     fun switchToChannel(channel: String?) {
         channelManager.switchToChannel(channel)
     }
@@ -173,6 +181,21 @@ class ChatViewModel(
     fun leaveChannel(channel: String) {
         channelManager.leaveChannel(channel)
         meshService.sendMessage("left $channel")
+    }
+
+    // MARK: - Staff access management
+
+    fun activateStaff(code: String): Boolean {
+        val activated = dataManager.activateStaff(code)
+        if (activated) {
+            state.setIsStaff(true)
+        }
+        return activated
+    }
+
+    fun deactivateStaff() {
+        dataManager.deactivateStaff()
+        state.setIsStaff(false)
     }
     
     // MARK: - Private Chat Management (delegated)
@@ -312,6 +335,11 @@ class ChatViewModel(
         
         val selectedPeer = state.getSelectedPrivateChatPeerValue()
         val currentChannelValue = state.getCurrentChannelValue()
+
+        if (!state.getIsStaffValue() && selectedPeer == null && currentChannelValue == null) {
+            Log.d(TAG, "sendMessage blocked: staff access required for main timeline")
+            return
+        }
         
         if (selectedPeer != null) {
             val pmState = state.getPrivateChatStatesValue()[selectedPeer]

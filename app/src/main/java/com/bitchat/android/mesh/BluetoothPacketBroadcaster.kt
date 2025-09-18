@@ -5,6 +5,8 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattServer
 import android.util.Log
+import android.annotation.SuppressLint
+import android.os.Build
 import com.bitchat.android.protocol.SpecialRecipients
 import com.bitchat.android.model.RoutedPacket
 import kotlinx.coroutines.CoroutineScope
@@ -196,6 +198,7 @@ class BluetoothPacketBroadcaster(
     /**
      * Send data to a single device (server->client)
      */
+    @SuppressLint("MissingPermission")
     private fun notifyDevice(
         device: BluetoothDevice, 
         data: ByteArray,
@@ -203,11 +206,23 @@ class BluetoothPacketBroadcaster(
         characteristic: BluetoothGattCharacteristic?
     ): Boolean {
         return try {
+            if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                // Requires BLUETOOTH_CONNECT on Android 12+
+                // We do not have direct context here; assume outer layer ensured permissions
+            }
             characteristic?.let { char ->
                 char.value = data
                 val result = gattServer?.notifyCharacteristicChanged(device, char, false) ?: false
                 result
             } ?: false
+        } catch (se: SecurityException) {
+            Log.w(TAG, "notifyCharacteristicChanged denied by security policy", se)
+            connectionScope.launch {
+                delay(CLEANUP_DELAY)
+                connectionTracker.removeSubscribedDevice(device)
+                connectionTracker.addressPeerMap.remove(device.address)
+            }
+            false
         } catch (e: Exception) {
             Log.w(TAG, "Error sending to server connection ${device.address}: ${e.message}")
             connectionScope.launch {
@@ -222,6 +237,7 @@ class BluetoothPacketBroadcaster(
     /**
      * Send data to a single device (client->server)
      */
+    @SuppressLint("MissingPermission")
     private fun writeToDeviceConn(
         deviceConn: BluetoothConnectionTracker.DeviceConnection, 
         data: ByteArray
@@ -232,6 +248,13 @@ class BluetoothPacketBroadcaster(
                 val result = deviceConn.gatt?.writeCharacteristic(char) ?: false
                 result
             } ?: false
+        } catch (se: SecurityException) {
+            Log.w(TAG, "writeCharacteristic denied by security policy for ${deviceConn.device.address}", se)
+            connectionScope.launch {
+                delay(CLEANUP_DELAY)
+                connectionTracker.cleanupDeviceConnection(deviceConn.device.address)
+            }
+            false
         } catch (e: Exception) {
             Log.w(TAG, "Error sending to client connection ${deviceConn.device.address}: ${e.message}")
             connectionScope.launch {

@@ -1,6 +1,7 @@
 package com.bitchat.android.mesh
 
 import android.bluetooth.*
+import android.annotation.SuppressLint
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
@@ -131,7 +132,13 @@ class BluetoothGattClientManager(
                     connectedDevices.values.filter { it.isClient && it.gatt != null }.forEach { deviceConn ->
                         try {
                             Log.d(TAG, "Requesting RSSI from ${deviceConn.device.address}")
-                            deviceConn.gatt?.readRemoteRssi()
+                            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S || permissionManager.hasConnectPermission()) {
+                                try {
+                                    deviceConn.gatt?.readRemoteRssi()
+                                } catch (se: SecurityException) {
+                                    Log.w(TAG, "readRemoteRssi denied by security policy", se)
+                                }
+                            }
                         } catch (e: Exception) {
                             Log.w(TAG, "Failed to request RSSI from ${deviceConn.device.address}: ${e.message}")
                         }
@@ -157,6 +164,7 @@ class BluetoothGattClientManager(
      * Start scanning with rate limiting
      */
     @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
     private fun startScanning() {
         if (!permissionManager.hasBluetoothPermissions() || bleScanner == null || !isActive) return
         
@@ -229,12 +237,19 @@ class BluetoothGattClientManager(
             }
         }
         
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && !permissionManager.hasScanPermission()) {
+            Log.w(TAG, "Missing BLUETOOTH_SCAN permission, cannot start scan")
+            return
+        }
         try {
             lastScanStartTime = currentTime
             isCurrentlyScanning = true
             
             bleScanner.startScan(scanFilters, powerManager.getScanSettings(), scanCallback)
             Log.d(TAG, "BLE scan started successfully")
+        } catch (se: SecurityException) {
+            Log.e(TAG, "startScan denied by security policy", se)
+            isCurrentlyScanning = false
         } catch (e: Exception) {
             Log.e(TAG, "Exception starting scan: ${e.message}")
             isCurrentlyScanning = false
@@ -245,15 +260,18 @@ class BluetoothGattClientManager(
      * Stop scanning
      */
     @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
     private fun stopScanning() {
         if (!permissionManager.hasBluetoothPermissions() || bleScanner == null) return
         
         if (isCurrentlyScanning) {
-            try {
-                scanCallback?.let { 
+        try {
+            scanCallback?.let { 
                     bleScanner.stopScan(it)
                     Log.d(TAG, "BLE scan stopped successfully")
                 }
+            } catch (se: SecurityException) {
+                Log.w(TAG, "stopScan denied by security policy", se)
             } catch (e: Exception) {
                 Log.w(TAG, "Error stopping scan: ${e.message}")
             }
@@ -315,6 +333,7 @@ class BluetoothGattClientManager(
      * Connect to a device as GATT client
      */
     @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
     private fun connectToDevice(device: BluetoothDevice, rssi: Int) {
         if (!permissionManager.hasBluetoothPermissions()) return
 
@@ -330,7 +349,11 @@ class BluetoothGattClientManager(
                     // Request a larger MTU. Must be done before any data transfer.
                     connectionScope.launch {
                         delay(200) // A small delay can improve reliability of MTU request.
-                        gatt.requestMtu(517)
+                        try {
+                            gatt.requestMtu(517)
+                        } catch (se: SecurityException) {
+                            Log.w(TAG, "requestMtu denied by security policy", se)
+                        }
                     }
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     if (status != BluetoothGatt.GATT_SUCCESS) {
@@ -391,21 +414,31 @@ class BluetoothGattClientManager(
                                 Log.d(TAG, "Client: Updated device connection with characteristic for $deviceAddress")
                             }
                             
-                            gatt.setCharacteristicNotification(characteristic, true)
-                            val descriptor = characteristic.getDescriptor(DESCRIPTOR_UUID)
-                            if (descriptor != null) {
-                                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                gatt.writeDescriptor(descriptor)
-                                
-                                connectionScope.launch {
+                            try {
+                                gatt.setCharacteristicNotification(characteristic, true)
+                                val descriptor = characteristic.getDescriptor(DESCRIPTOR_UUID)
+                                if (descriptor != null) {
+                                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                                    gatt.writeDescriptor(descriptor)
+                                } else {
+                                    Log.e(TAG, "Client: CCCD descriptor not found for $deviceAddress")
+                                    gatt.disconnect()
+                                    return
+                                }
+                            } catch (se: SecurityException) {
+                                Log.e(TAG, "Client: setNotification/writeDescriptor denied by security policy", se)
+                                gatt.disconnect()
+                                return
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Client: Error enabling notifications: ${e.message}")
+                                gatt.disconnect()
+                                return
+                            }
+                            connectionScope.launch {
                                     delay(200)
                                     Log.i(TAG, "Client: Connection setup complete for $deviceAddress")
                                     delegate?.onDeviceConnected(device)
                                 }
-                            } else {
-                                Log.e(TAG, "Client: CCCD descriptor not found for $deviceAddress")
-                                gatt.disconnect()
-                            }
                         } else {
                             Log.e(TAG, "Client: Required characteristic not found for $deviceAddress")
                             gatt.disconnect()
@@ -450,7 +483,10 @@ class BluetoothGattClientManager(
             }
         }
         
-        try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && !permissionManager.hasConnectPermission()) {
+            Log.w(TAG, "Missing BLUETOOTH_CONNECT permission, cannot connectGatt")
+            // keep pending connection as per existing comment
+        } else try {
             Log.d(TAG, "Client: Attempting GATT connection to $deviceAddress with autoConnect=false")
             val gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
             if (gatt == null) {
@@ -460,6 +496,8 @@ class BluetoothGattClientManager(
             } else {
                 Log.d(TAG, "Client: GATT connection initiated successfully for $deviceAddress")
             }
+        } catch (se: SecurityException) {
+            Log.e(TAG, "Client: connectGatt denied by security policy", se)
         } catch (e: Exception) {
             Log.e(TAG, "Client: Exception connecting to $deviceAddress: ${e.message}")
             // keep the pending connection so we can avoid too many reconnections attempts, TODO: needs testing

@@ -1,6 +1,6 @@
 package com.bitchat.android.core.ui.utils
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 fun Modifier.singleOrTripleClickable(
     onSingleClick: () -> Unit,
     onTripleClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     clickTimeThreshold: Long = 300L
 ): Modifier = composed {
     var tapCount by remember { mutableIntStateOf(0) }
@@ -17,7 +18,8 @@ fun Modifier.singleOrTripleClickable(
     var singleClickJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
-    this.clickable {
+    this.combinedClickable(
+        onClick = {
         val currentTime = System.currentTimeMillis()
 
         if (currentTime - lastTapTime < clickTimeThreshold) {
@@ -53,5 +55,12 @@ fun Modifier.singleOrTripleClickable(
         if (tapCount > 3) {
             tapCount = 0
         }
-    }
+    },
+        onLongClick = {
+            singleClickJob?.cancel()
+            singleClickJob = null
+            tapCount = 0
+            onLongClick?.invoke()
+        }
+    )
 }

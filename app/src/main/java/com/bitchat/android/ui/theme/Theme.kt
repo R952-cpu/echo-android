@@ -7,30 +7,35 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Colors that match the iOS bitchat theme
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF39FF14),        // Bright green (terminal-like)
-    onPrimary = Color.Black,
-    secondary = Color(0xFF2ECB10),      // Darker green
-    onSecondary = Color.Black,
-    background = Color.Black,
-    onBackground = Color(0xFF39FF14),   // Green on black
-    surface = Color(0xFF111111),        // Very dark gray
-    onSurface = Color(0xFF39FF14),      // Green text
-    error = Color(0xFFFF5555),          // Red for errors
-    onError = Color.Black
+    primary = EchoPalette.BrandBlue,
+    onPrimary = Color.White,
+    secondary = EchoPalette.IncomingPurple,
+    onSecondary = Color.White,
+    background = Color(0xFF0B0D12),
+    onBackground = Color(0xFFE6ECF7),
+    surface = Color(0xFF13151C),
+    onSurface = Color(0xFFE0E6F3),
+    surfaceVariant = Color(0xFF1C1F27),
+    onSurfaceVariant = Color(0xFFAAB4C6),
+    outline = Color(0xFF2B3140),
+    error = EchoPalette.AccentRed,
+    onError = Color.White
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF008000),        // Dark green
+    primary = EchoPalette.BrandBlue,
     onPrimary = Color.White,
-    secondary = Color(0xFF006600),      // Even darker green
+    secondary = EchoPalette.IncomingPurple,
     onSecondary = Color.White,
-    background = Color.White,
-    onBackground = Color(0xFF008000),   // Dark green on white
-    surface = Color(0xFFF8F8F8),        // Very light gray
-    onSurface = Color(0xFF008000),      // Dark green text
-    error = Color(0xFFCC0000),          // Dark red for errors
+    background = Color(0xFFF6FAFF),
+    onBackground = Color(0xFF1F3148),
+    surface = Color.White,
+    onSurface = Color(0xFF24354C),
+    surfaceVariant = Color(0xFFE8EFFC),
+    onSurfaceVariant = Color(0xFF42526B),
+    outline = Color(0xFFCAD7EB),
+    error = EchoPalette.AccentRed,
     onError = Color.White
 )
 

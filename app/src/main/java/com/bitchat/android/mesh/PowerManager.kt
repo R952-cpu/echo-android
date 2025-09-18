@@ -192,11 +192,13 @@ class PowerManager(private val context: Context) {
      * Get RSSI filter threshold for current power mode
      */
     fun getRSSIThreshold(): Int {
+        // Relax thresholds to improve cross‑platform discovery reliability,
+        // especially when iOS advertisements are around -90 dBm in the wild.
         return when (currentMode) {
             PowerMode.PERFORMANCE -> -95
-            PowerMode.BALANCED -> -85
-            PowerMode.POWER_SAVER -> -75
-            PowerMode.ULTRA_LOW_POWER -> -65
+            PowerMode.BALANCED -> -95
+            PowerMode.POWER_SAVER -> -90
+            PowerMode.ULTRA_LOW_POWER -> -80
         }
     }
     
