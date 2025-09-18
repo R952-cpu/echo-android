@@ -5,12 +5,19 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import com.bitchat.android.mesh.BluetoothMeshDelegate
 import com.bitchat.android.mesh.BluetoothMeshService
 import com.bitchat.android.model.BitchatMessage
 import com.bitchat.android.model.DeliveryAck
+import com.bitchat.android.model.PeerConnectionState
+import com.bitchat.android.model.PeerDisplayData
 import com.bitchat.android.model.ReadReceipt
+import com.bitchat.android.mesh.PeerFingerprintManager
+import com.bitchat.android.identity.NostrIdentity
+import com.bitchat.android.identity.NostrIdentityProvider
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.util.*
@@ -27,6 +34,7 @@ class ChatViewModel(
 
     companion object {
         private const val TAG = "ChatViewModel"
+        private val BECH32_CHARSET: Set<Char> = "qpzry9x8gf2tvdw0s3jn54khce6mua7l0123456789".toSet()
     }
 
     // State management
@@ -49,6 +57,21 @@ class ChatViewModel(
     val privateChatManager = PrivateChatManager(state, messageManager, dataManager, noiseSessionDelegate)
     private val commandProcessor = CommandProcessor(state, messageManager, channelManager, privateChatManager)
     private val notificationManager = NotificationManager(application.applicationContext)
+    private val fingerprintManager = PeerFingerprintManager.getInstance()
+    private val nostrIdentityProvider = NostrIdentityProvider(application.applicationContext)
+
+    private val _detectedNpub = MutableLiveData<String?>(null)
+    val detectedNpub: LiveData<String?> = _detectedNpub
+
+    private val _filteredPeers = MutableLiveData<List<PeerDisplayData>>(emptyList())
+    val filteredPeers: LiveData<List<PeerDisplayData>> = _filteredPeers
+
+    private val connectedPeersObserver = Observer<List<String>> { refreshAllPeers() }
+    private val peerNicknamesObserver = Observer<Map<String, String>> { refreshAllPeers() }
+    private val peerRssiObserver = Observer<Map<String, Int>> { refreshAllPeers() }
+    private val favoriteObserver = Observer<Set<String>> { refreshAllPeers() }
+    private val unreadObserver = Observer<Set<String>> { refreshAllPeers() }
+    private val privateChatsObserver = Observer<Map<String, List<BitchatMessage>>> { refreshAllPeers() }
     
     // Delegate handler for mesh callbacks
     private val meshDelegateHandler = MeshDelegateHandler(
@@ -60,7 +83,8 @@ class ChatViewModel(
         coroutineScope = viewModelScope,
         onHapticFeedback = { ChatViewModelUtils.triggerHapticFeedback(application.applicationContext) },
         getMyPeerID = { meshService.myPeerID },
-        getMeshService = { meshService }
+        getMeshService = { meshService },
+        onPeerListChanged = { refreshAllPeers() }
     )
     
     // Expose state through LiveData (maintaining the same interface)
@@ -92,12 +116,21 @@ class ChatViewModel(
     val peerFingerprints: LiveData<Map<String, String>> = state.peerFingerprints
     val peerNicknames: LiveData<Map<String, String>> = state.peerNicknames
     val peerRSSI: LiveData<Map<String, Int>> = state.peerRSSI
+    val allPeers: LiveData<List<PeerDisplayData>> = state.allPeers
+    val peopleSearchQuery: LiveData<String> = state.peopleSearchQuery
     val showAppInfo: LiveData<Boolean> = state.showAppInfo
     val isStaff: LiveData<Boolean> = state.isStaff
     
     init {
         // Note: Mesh service delegate is now set by MainActivity
         loadAndInitialize()
+        state.connectedPeers.observeForever(connectedPeersObserver)
+        state.peerNicknames.observeForever(peerNicknamesObserver)
+        state.peerRSSI.observeForever(peerRssiObserver)
+        state.favoritePeers.observeForever(favoriteObserver)
+        state.unreadPrivateMessages.observeForever(unreadObserver)
+        state.privateChats.observeForever(privateChatsObserver)
+        refreshAllPeers()
     }
     
     private fun loadAndInitialize() {
@@ -149,11 +182,19 @@ class ChatViewModel(
                 messageManager.addMessage(welcomeMessage)
             }
         }
+
+        refreshAllPeers()
     }
     
     override fun onCleared() {
         super.onCleared()
         // Note: Mesh service lifecycle is now managed by MainActivity
+        state.connectedPeers.removeObserver(connectedPeersObserver)
+        state.peerNicknames.removeObserver(peerNicknamesObserver)
+        state.peerRSSI.removeObserver(peerRssiObserver)
+        state.favoritePeers.removeObserver(favoriteObserver)
+        state.unreadPrivateMessages.removeObserver(unreadObserver)
+        state.privateChats.removeObserver(privateChatsObserver)
     }
     
     // MARK: - Nickname Management
@@ -198,6 +239,176 @@ class ChatViewModel(
         state.setIsStaff(false)
     }
     
+    // MARK: - Sidebar & Peer Directory
+
+    fun setPeopleSearchQuery(query: String) {
+        val sanitized = query.replace("\n", " ")
+        state.setPeopleSearchQuery(sanitized)
+        detectNpubFromQuery(sanitized)
+        applyPeerFilter(query = sanitized)
+    }
+
+    fun getCurrentNostrIdentity(): NostrIdentity = nostrIdentityProvider.getOrCreateIdentity()
+
+    fun getCurrentNostrNpub(): String = getCurrentNostrIdentity().npub
+
+    fun trySetNostrNpub(candidate: String): Boolean {
+        val normalized = extractNpub(candidate.trim()) ?: return false
+        nostrIdentityProvider.setNpub(normalized)
+        return true
+    }
+
+    fun clearNostrNpub() {
+        nostrIdentityProvider.clearNpub()
+    }
+
+    private fun detectNpubFromQuery(rawQuery: String) {
+        val candidate = rawQuery.trim()
+        _detectedNpub.value = extractNpub(candidate)
+    }
+
+    private fun applyPeerFilter(
+        peers: List<PeerDisplayData> = state.getAllPeersValue(),
+        query: String = state.getPeopleSearchQueryValue()
+    ) {
+        val trimmed = query.trim()
+        val filtered = if (trimmed.isEmpty()) {
+            peers
+        } else {
+            peers.filter { it.displayName.contains(trimmed, ignoreCase = true) }
+        }
+        _filteredPeers.value = filtered
+    }
+
+    private fun refreshAllPeers() {
+        val connected = state.getConnectedPeersValue()
+        val nicknames = state.getPeerNicknamesValue()
+        val rssiValues = state.getPeerRSSIValue()
+        val unreadPrivate = state.getUnreadPrivateMessagesValue()
+        val privateChatsSnapshots = state.getPrivateChatsValue()
+        val favoriteFingerprints = state.getFavoritePeersValue()
+        val myPeerID = meshService.myPeerID
+        val myNickname = state.getNicknameValue() ?: myPeerID
+        val fingerprintMappings = fingerprintManager.getAllPeerFingerprints()
+
+        val peers = mutableListOf<PeerDisplayData>()
+        val seenKeys = mutableSetOf<String>()
+
+        connected.forEach { peerID ->
+            val key = peerID.ifEmpty { return@forEach }
+            if (!seenKeys.add(key)) return@forEach
+
+            val fingerprint = fingerprintMappings[peerID]
+            val isMe = peerID == myPeerID
+            val displayName = when {
+                isMe -> myNickname
+                else -> nicknames[peerID] ?: peerID
+            }
+            val lastMessageTime = privateChatsSnapshots[peerID]?.maxOfOrNull { it.timestamp.time }
+            val isFavorite = fingerprint?.let { favoriteFingerprints.contains(it) } ?: false
+            val connectionState = when {
+                isMe -> PeerConnectionState.MESH_CONNECTED
+                isFavorite && !connected.contains(peerID) -> PeerConnectionState.NOSTR_AVAILABLE
+                else -> PeerConnectionState.MESH_CONNECTED
+            }
+
+            peers += PeerDisplayData(
+                peerId = peerID,
+                fingerprint = fingerprint,
+                displayName = displayName,
+                isMe = isMe,
+                isFavorite = isFavorite,
+                isMutualFavorite = isFavorite,
+                hasUnreadMessages = unreadPrivate.contains(peerID),
+                connectionState = connectionState,
+                signalStrength = convertRssiToSignalStrength(rssiValues[peerID]),
+                lastSeenEpochMillis = lastMessageTime
+            )
+        }
+
+        if (seenKeys.add(myPeerID)) {
+            peers += PeerDisplayData(
+                peerId = myPeerID,
+                fingerprint = fingerprintMappings[myPeerID],
+                displayName = myNickname,
+                isMe = true,
+                isFavorite = false,
+                isMutualFavorite = false,
+                hasUnreadMessages = false,
+                connectionState = PeerConnectionState.MESH_CONNECTED,
+                signalStrength = convertRssiToSignalStrength(rssiValues[myPeerID]),
+                lastSeenEpochMillis = null
+            )
+        }
+
+        favoriteFingerprints.forEach { fingerprint ->
+            if (fingerprint.isBlank()) return@forEach
+            val alreadyRepresented = peers.any { it.fingerprint == fingerprint }
+            if (alreadyRepresented) return@forEach
+            val key = "fav_$fingerprint"
+            if (!seenKeys.add(key)) return@forEach
+
+            val mappedPeerID = fingerprintManager.getPeerIDForFingerprint(fingerprint)
+            val isConnected = mappedPeerID != null && connected.contains(mappedPeerID)
+            val displayName = when {
+                mappedPeerID != null && mappedPeerID == myPeerID -> myNickname
+                mappedPeerID != null -> nicknames[mappedPeerID] ?: mappedPeerID
+                else -> fingerprint.take(12)
+            }
+            val lastMessageTime = mappedPeerID?.let { privateChatsSnapshots[it]?.maxOfOrNull { msg -> msg.timestamp.time } }
+            val connectionState = when {
+                isConnected -> PeerConnectionState.MESH_CONNECTED
+                else -> PeerConnectionState.NOSTR_AVAILABLE
+            }
+
+            peers += PeerDisplayData(
+                peerId = mappedPeerID,
+                fingerprint = fingerprint,
+                displayName = displayName,
+                isMe = mappedPeerID == myPeerID,
+                isFavorite = true,
+                isMutualFavorite = true,
+                hasUnreadMessages = mappedPeerID?.let { unreadPrivate.contains(it) } ?: false,
+                connectionState = connectionState,
+                signalStrength = convertRssiToSignalStrength(mappedPeerID?.let { rssiValues[it] }),
+                lastSeenEpochMillis = lastMessageTime
+            )
+        }
+
+        val distinctPeers = peers.distinctBy { it.peerId ?: it.fingerprint }
+        val sorted = distinctPeers.sortedWith(
+            compareByDescending<PeerDisplayData> { it.hasUnreadMessages }
+                .thenByDescending { it.lastSeenEpochMillis ?: 0L }
+                .thenByDescending { it.isFavorite }
+                .thenBy { it.displayName.lowercase() }
+        )
+
+        state.setAllPeers(sorted)
+        applyPeerFilter(sorted, state.getPeopleSearchQueryValue())
+    }
+
+    private fun convertRssiToSignalStrength(rssi: Int?): Int {
+        val value = rssi ?: return 0
+        return when {
+            value >= -60 -> 3
+            value >= -75 -> 2
+            value >= -90 -> 1
+            else -> 0
+        }
+    }
+
+    private fun extractNpub(input: String): String? {
+        if (input.isEmpty()) return null
+        var candidate = input
+        if (candidate.startsWith("nostr:", ignoreCase = true)) {
+            candidate = candidate.substring(6)
+        }
+        val lower = candidate.lowercase()
+        if (!lower.startsWith("npub")) return null
+        if (candidate.length !in 20..120) return null
+        return if (candidate.all { BECH32_CHARSET.contains(it.lowercaseChar()) }) candidate else null
+    }
+
     // MARK: - Private Chat Management (delegated)
     
     fun startPrivateChat(peerID: String) {
@@ -410,6 +621,7 @@ class ChatViewModel(
         
         // Log current state after toggle
         logCurrentFavoriteState()
+        refreshAllPeers()
     }
     
     private fun logCurrentFavoriteState() {

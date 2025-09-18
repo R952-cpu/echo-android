@@ -20,7 +20,8 @@ class MeshDelegateHandler(
     private val coroutineScope: CoroutineScope,
     private val onHapticFeedback: () -> Unit,
     private val getMyPeerID: () -> String,
-    private val getMeshService: () -> Any
+    private val getMeshService: () -> Any,
+    private val onPeerListChanged: () -> Unit
 ) : BluetoothMeshDelegate {
 
     override fun didReceiveMessage(message: BitchatMessage) {
@@ -92,6 +93,8 @@ class MeshDelegateHandler(
                     privateChatManager.cleanupDisconnectedPeer(currentPeer)
                 }
             }
+
+            onPeerListChanged()
         }
     }
     

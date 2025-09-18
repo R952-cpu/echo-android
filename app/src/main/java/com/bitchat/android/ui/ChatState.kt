@@ -5,6 +5,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
 import com.bitchat.android.model.BitchatMessage
+import com.bitchat.android.model.PeerDisplayData
 
 /**
  * Centralized state definitions and data classes for the chat system
@@ -112,6 +113,12 @@ class ChatState {
 
     private val _peerRSSI = MutableLiveData<Map<String, Int>>(emptyMap())
     val peerRSSI: LiveData<Map<String, Int>> = _peerRSSI
+
+    private val _allPeers = MutableLiveData<List<PeerDisplayData>>(emptyList())
+    val allPeers: LiveData<List<PeerDisplayData>> = _allPeers
+
+    private val _peopleSearchQuery = MutableLiveData("")
+    val peopleSearchQuery: LiveData<String> = _peopleSearchQuery
     
     // peerIDToPublicKeyFingerprint REMOVED - fingerprints now handled centrally in PeerManager
     
@@ -160,6 +167,9 @@ class ChatState {
     fun getPeerSessionStatesValue() = _peerSessionStates.value ?: emptyMap()
     fun getPeerFingerprintsValue() = _peerFingerprints.value ?: emptyMap()
     fun getPeerNicknamesValue() = _peerNicknames.value ?: emptyMap()
+    fun getPeerRSSIValue() = _peerRSSI.value ?: emptyMap()
+    fun getAllPeersValue() = _allPeers.value ?: emptyList()
+    fun getPeopleSearchQueryValue() = _peopleSearchQuery.value ?: ""
     fun getShowAppInfoValue() = _showAppInfo.value ?: false
     
     // Setters for state updates
@@ -281,6 +291,14 @@ class ChatState {
 
     fun setPeerRSSI(rssi: Map<String, Int>) {
         _peerRSSI.value = rssi
+    }
+
+    fun setAllPeers(peers: List<PeerDisplayData>) {
+        _allPeers.value = peers
+    }
+
+    fun setPeopleSearchQuery(query: String) {
+        _peopleSearchQuery.value = query
     }
     
     fun setShowAppInfo(show: Boolean) {

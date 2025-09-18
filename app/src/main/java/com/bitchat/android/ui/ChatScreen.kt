@@ -36,6 +36,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
+import com.bitchat.android.identity.NostrIdentity
 import com.bitchat.android.model.PrivateChatState
 import com.bitchat.android.ui.theme.EchoBrushes
 import com.bitchat.android.ui.theme.EchoMetrics
@@ -74,6 +75,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
     var showPasswordDialog by remember { mutableStateOf(false) }
     var passwordInput by remember { mutableStateOf("") }
     var showStaffDialog by remember { mutableStateOf(false) }
+    var showMyNostrSheet by remember { mutableStateOf(false) }
 
     // Show password dialog when needed
     LaunchedEffect(showPasswordPrompt) {
@@ -212,6 +214,7 @@ fun ChatScreen(viewModel: ChatViewModel) {
             SidebarOverlay(
                 viewModel = viewModel,
                 onDismiss = { viewModel.hideSidebar() },
+                onShowMyNostr = { showMyNostrSheet = true },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -254,6 +257,18 @@ fun ChatScreen(viewModel: ChatViewModel) {
         onDecline = { pendingPMFrom?.let { viewModel.declinePrivateChatRequest(it) } },
         onDismiss = { viewModel.clearPendingPrivateChatRequest() }
     )
+
+    if (showMyNostrSheet) {
+        val nostrIdentity = viewModel.getCurrentNostrIdentity()
+        MyNostrSheet(
+            identity = nostrIdentity,
+            onDismiss = { showMyNostrSheet = false },
+            onSaveNpub = { candidate ->
+                viewModel.trySetNostrNpub(candidate)
+            },
+            onClearNpub = { viewModel.clearNostrNpub() }
+        )
+    }
 }
 
 @Composable

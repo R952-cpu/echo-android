@@ -103,7 +103,8 @@ dependencies {
     
     // Security preferences
     implementation(libs.androidx.security.crypto)
-    
+    implementation(libs.zxing.core)
+
     // Testing
     testImplementation(libs.bundles.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))

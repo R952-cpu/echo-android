@@ -1,11 +1,14 @@
 package com.bitchat.android.ui
 
 import com.bitchat.android.R
-import android.util.Log
+import android.graphics.Bitmap
+import android.text.format.DateUtils
+import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -16,11 +19,29 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.Image
+import androidx.compose.ui.window.Dialog
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
+import com.bitchat.android.model.PeerDisplayData
+import com.bitchat.android.model.PeerConnectionState
+import com.bitchat.android.identity.NostrIdentity
 
 
 /**
@@ -32,19 +53,21 @@ import androidx.compose.ui.unit.sp
 fun SidebarOverlay(
     viewModel: ChatViewModel,
     onDismiss: () -> Unit,
+    onShowMyNostr: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val interactionSource = remember { MutableInteractionSource() }
+    val panelInteractionSource = remember { MutableInteractionSource() }
 
-    val connectedPeers by viewModel.connectedPeers.observeAsState(emptyList())
-    val joinedChannels by viewModel.joinedChannels.observeAsState(emptyList())
+    val joinedChannels by viewModel.joinedChannels.observeAsState(emptySet())
     val currentChannel by viewModel.currentChannel.observeAsState()
     val selectedPrivatePeer by viewModel.selectedPrivateChatPeer.observeAsState()
-    val nickname by viewModel.nickname.observeAsState("")
     val unreadChannelMessages by viewModel.unreadChannelMessages.observeAsState(emptyMap())
-    val peerNicknames by viewModel.peerNicknames.observeAsState(emptyMap())
-    val peerRSSI by viewModel.peerRSSI.observeAsState(emptyMap())
+    val filteredPeers by viewModel.filteredPeers.observeAsState(emptyList())
+    val allPeers by viewModel.allPeers.observeAsState(emptyList())
+    val searchQuery by viewModel.peopleSearchQuery.observeAsState("")
+    val detectedNpub by viewModel.detectedNpub.observeAsState(null)
 
     Box(
         modifier = modifier
@@ -54,101 +77,107 @@ fun SidebarOverlay(
         Row(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(280.dp)
+                .widthIn(min = 300.dp, max = 360.dp)
                 .align(Alignment.CenterEnd)
-                .clickable { /* Prevent dismissing when clicking sidebar */ }
+                .clickable(indication = null, interactionSource = panelInteractionSource) { }
         ) {
-            // Grey vertical bar for visual continuity (matches iOS)
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(1.dp)
                     .background(Color.Gray.copy(alpha = 0.3f))
             )
-            
+
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
                     .weight(1f)
                     .background(colorScheme.background.copy(alpha = 0.95f))
-                    .windowInsetsPadding(WindowInsets.statusBars) // Add status bar padding
+                    .windowInsetsPadding(WindowInsets.statusBars)
             ) {
-                SidebarHeader()
+                SidebarTopBar(
+                    colorScheme = colorScheme,
+                    onDismiss = onDismiss,
+                    onShowMyNostr = onShowMyNostr
+                )
 
                 HorizontalDivider()
-                
-                // Scrollable content
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Channels section
+                    item {
+                        PeopleSearchBar(
+                            query = searchQuery,
+                            onQueryChange = viewModel::setPeopleSearchQuery,
+                            onClear = { viewModel.setPeopleSearchQuery("") }
+                        )
+                    }
+
+                    detectedNpub?.let { npub ->
+                        item {
+                            NostrDetectedCard(
+                                npub = npub,
+                                colorScheme = colorScheme
+                            )
+                        }
+                    }
+
                     if (joinedChannels.isNotEmpty()) {
                         item {
                             ChannelsSection(
-                                channels = joinedChannels.toList(), // Convert Set to List
+                                channels = joinedChannels.toList(),
                                 currentChannel = currentChannel,
                                 colorScheme = colorScheme,
                                 onChannelClick = { channel ->
                                     viewModel.switchToChannel(channel)
                                     onDismiss()
                                 },
-                                onLeaveChannel = { channel ->
-                                    viewModel.leaveChannel(channel)
-                                },
+                                onLeaveChannel = { channel -> viewModel.leaveChannel(channel) },
                                 unreadChannelMessages = unreadChannelMessages
                             )
                         }
-                        
+
                         item {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
                         }
                     }
-                    
-                    // People section
+
                     item {
-                        PeopleSection(
-                            connectedPeers = connectedPeers,
-                            peerNicknames = peerNicknames,
-                            peerRSSI = peerRSSI,
-                            nickname = nickname,
-                            colorScheme = colorScheme,
-                            selectedPrivatePeer = selectedPrivatePeer,
-                            viewModel = viewModel,
-                            onPrivateChatStart = { peerID ->
-                                viewModel.startPrivateChat(peerID)
-                                onDismiss()
-                            }
-                        )
+                        PeopleSectionHeader(colorScheme = colorScheme)
+                    }
+
+                    if (filteredPeers.isEmpty()) {
+                        item {
+                            PeopleEmptyState(
+                                searchQuery = searchQuery,
+                                colorScheme = colorScheme,
+                                hasAnyPeers = allPeers.isNotEmpty()
+                            )
+                        }
+                    } else {
+                        items(filteredPeers, key = { peer -> peer.peerId ?: peer.fingerprint ?: peer.displayName }) { peer ->
+                            PeerItem(
+                                peer = peer,
+                                isSelected = peer.peerId == selectedPrivatePeer,
+                                colorScheme = colorScheme,
+                                onItemClick = {
+                                    peer.peerId?.let { target ->
+                                        viewModel.startPrivateChat(target)
+                                        onDismiss()
+                                    }
+                                },
+                                onToggleFavorite = {
+                                    peer.peerId?.let { viewModel.toggleFavorite(it) }
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SidebarHeader() {
-    val colorScheme = MaterialTheme.colorScheme
-    
-    Row(
-        modifier = Modifier
-            .height(42.dp) // Match reduced main header height
-            .fillMaxWidth()
-            .background(colorScheme.background.copy(alpha = 0.95f))
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = stringResource(id = R.string.your_network).uppercase(),
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            ),
-            color = colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.weight(1f))
     }
 }
 
@@ -231,91 +260,134 @@ fun ChannelsSection(
 }
 
 @Composable
-fun PeopleSection(
-    connectedPeers: List<String>,
-    peerNicknames: Map<String, String>,
-    peerRSSI: Map<String, Int>,
-    nickname: String,
+private fun SidebarTopBar(
     colorScheme: ColorScheme,
-    selectedPrivatePeer: String?,
-    viewModel: ChatViewModel,
-    onPrivateChatStart: (String) -> Unit
+    onDismiss: () -> Unit,
+    onShowMyNostr: () -> Unit
 ) {
-    Column {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(id = R.string.sidebar_title_around_me).uppercase(),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(onClick = onShowMyNostr) {
+            Icon(
+                imageVector = Icons.Outlined.QrCode,
+                contentDescription = stringResource(id = R.string.sidebar_my_nostr)
+            )
+        }
+        TextButton(onClick = onDismiss) {
+            Text(text = stringResource(id = R.string.sidebar_done))
+        }
+    }
+}
+
+@Composable
+private fun PeopleSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClear: () -> Unit
+) {
+    @Suppress("DEPRECATION")
+    val clipboardManager = LocalClipboardManager.current
+    val clipboardText = clipboardManager.getText()?.text
+    val clipboardEligible = clipboardText?.let { text ->
+        text.contains("npub", ignoreCase = true) || text.startsWith("nostr:", ignoreCase = true)
+    } ?: false
+
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text(text = stringResource(id = R.string.sidebar_search_hint)) },
+        singleLine = true,
+        leadingIcon = {
+            Icon(imageVector = Icons.Outlined.Search, contentDescription = null)
+        },
+        trailingIcon = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (clipboardEligible) {
+                    IconButton(onClick = {
+                        clipboardText?.let { onQueryChange(it) }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentPaste,
+                            contentDescription = stringResource(id = R.string.sidebar_paste_clipboard)
+                        )
+                    }
+                }
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = onClear) {
+                        Icon(imageVector = Icons.Outlined.Close, contentDescription = stringResource(id = R.string.sidebar_clear_search))
+                    }
+                }
+            }
+        },
+        shape = RoundedCornerShape(10.dp),
+        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { /* handled via state */ })
+    )
+}
+
+@Composable
+private fun NostrDetectedCard(
+    npub: String,
+    colorScheme: ColorScheme
+) {
+    @Suppress("DEPRECATION")
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        color = colorScheme.surface.copy(alpha = 0.95f),
+        border = BorderStroke(0.8.dp, Color(0xFF9C6BFF).copy(alpha = 0.25f))
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Group, // Using Person icon for people
+                imageVector = Icons.Outlined.Language,
                 contentDescription = null,
-                modifier = Modifier.size(12.dp),
-                tint = colorScheme.onSurface.copy(alpha = 0.6f)
+                tint = Color(0xFF9C6BFF)
             )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = stringResource(id = R.string.people).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = colorScheme.onSurface.copy(alpha = 0.6f),
-                fontWeight = FontWeight.Bold
-            )
-        }
-        
-        if (connectedPeers.isEmpty()) {
-            Text(
-                text = stringResource(id = R.string.no_one_connected),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colorScheme.onSurface.copy(alpha = 0.5f),
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-            )
-        } else {
-            // Observe reactive state for favorites and fingerprints
-            val hasUnreadPrivateMessages by viewModel.unreadPrivateMessages.observeAsState(emptySet())
-            val privateChats by viewModel.privateChats.observeAsState(emptyMap())
-            val favoritePeers by viewModel.favoritePeers.observeAsState(emptySet())
-            val peerFingerprints by viewModel.peerFingerprints.observeAsState(emptyMap())
-            
-            // Reactive favorite computation for all peers
-            val peerFavoriteStates = remember(favoritePeers, peerFingerprints, connectedPeers) {
-                connectedPeers.associateWith { peerID ->
-                    // Reactive favorite computation - same as ChatHeader
-                    val fingerprint = peerFingerprints[peerID]
-                    fingerprint != null && favoritePeers.contains(fingerprint)
-                }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(id = R.string.sidebar_detected_npub_title),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = colorScheme.onSurface
+                )
+                Text(
+                    text = npub,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            
-            Log.d("SidebarComponents", "Recomposing with ${favoritePeers.size} favorites, peer states: $peerFavoriteStates")
- 
-            // Smart sorting: unread DMs first, then by most recent DM, then favorites, then alphabetical
-            val sortedPeers = connectedPeers.sortedWith(
-                compareBy<String> { !hasUnreadPrivateMessages.contains(it) } // Unread DM senders first
-                .thenByDescending { privateChats[it]?.maxByOrNull { msg -> msg.timestamp }?.timestamp?.time ?: 0L } // Most recent DM (convert Date to Long)
-                .thenBy { !(peerFavoriteStates[it] ?: false) } // Favorites first
-                .thenBy { (if (it == nickname) "You" else (peerNicknames[it] ?: it)).lowercase() } // Alphabetical
-            )
-            
-            sortedPeers.forEach { peerID ->
-                val isFavorite = peerFavoriteStates[peerID] ?: false
-                
-                PeerItem(
-                    peerID = peerID,
-                    displayName = if (peerID == nickname) "You" else (peerNicknames[peerID] ?: peerID),
-                    signalStrength = convertRSSIToSignalStrength(peerRSSI[peerID]),
-                    isSelected = peerID == selectedPrivatePeer,
-                    isFavorite = isFavorite,
-                    hasUnreadDM = hasUnreadPrivateMessages.contains(peerID),
-                    colorScheme = colorScheme,
-                    onItemClick = { onPrivateChatStart(peerID) },
-                    onToggleFavorite = { 
-                        Log.d("SidebarComponents", "Sidebar toggle favorite: peerID=$peerID, currentFavorite=$isFavorite")
-                        viewModel.toggleFavorite(peerID) 
-                    },
-                    unreadCount = privateChats[peerID]?.count { msg -> 
-                        // Count unread messages from this peer (messages not from the current user)
-                        msg.sender != nickname && hasUnreadPrivateMessages.contains(peerID)
-                    } ?: if (hasUnreadPrivateMessages.contains(peerID)) 1 else 0
+            IconButton(onClick = {
+                clipboardManager.setText(AnnotatedString(npub))
+                Toast.makeText(context, R.string.sidebar_npub_copied, Toast.LENGTH_SHORT).show()
+            }) {
+                Icon(
+                    imageVector = Icons.Outlined.ContentPaste,
+                    contentDescription = stringResource(id = R.string.sidebar_copy_npub)
                 )
             }
         }
@@ -323,65 +395,315 @@ fun PeopleSection(
 }
 
 @Composable
-private fun PeerItem(
-    peerID: String,
-    displayName: String,
-    signalStrength: Int,
-    isSelected: Boolean,
-    isFavorite: Boolean,
-    hasUnreadDM: Boolean,
-    colorScheme: ColorScheme,
-    onItemClick: () -> Unit,
-    onToggleFavorite: () -> Unit,
-    unreadCount: Int = 0
-) {
+private fun PeopleSectionHeader(colorScheme: ColorScheme) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onItemClick() }
-            .background(
-                if (isSelected) colorScheme.primaryContainer.copy(alpha = 0.3f)
-                else Color.Transparent
-            )
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Show unread badge or signal strength
-        if (hasUnreadDM) {
-            UnreadBadge(
-                count = unreadCount,
-                colorScheme = colorScheme
-            )
-        } else {
-            // Signal strength indicators
-            SignalStrengthIndicator(
-                signalStrength = signalStrength,
-                colorScheme = colorScheme
-            )
-        }
-        
-        Spacer(modifier = Modifier.width(8.dp))
-        
-        Text(
-            text = displayName,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isSelected) colorScheme.primary else colorScheme.onSurface,
-            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
-            modifier = Modifier.weight(1f)
+        Icon(
+            imageVector = Icons.Default.Group,
+            contentDescription = null,
+            modifier = Modifier.size(12.dp),
+            tint = colorScheme.onSurface.copy(alpha = 0.6f)
         )
-        
-        // Favorite star with proper filled/outlined states
-        IconButton(
-            onClick = onToggleFavorite,
-            modifier = Modifier.size(24.dp)
-        ) {
-            Icon(
-                imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
-                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                modifier = Modifier.size(16.dp),
-                tint = if (isFavorite) Color(0xFFFFD700) else Color(0x87878700)
-            )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = stringResource(id = R.string.sidebar_people_section),
+            style = MaterialTheme.typography.labelSmall,
+            color = colorScheme.onSurface.copy(alpha = 0.6f),
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun PeopleEmptyState(
+    searchQuery: String,
+    colorScheme: ColorScheme,
+    hasAnyPeers: Boolean
+) {
+    val textRes = if (searchQuery.isBlank()) {
+        if (hasAnyPeers) R.string.sidebar_no_results else R.string.sidebar_no_people
+    } else {
+        R.string.sidebar_no_results
+    }
+    Text(
+        text = stringResource(id = textRes),
+        style = MaterialTheme.typography.bodyMedium,
+        color = colorScheme.onSurface.copy(alpha = 0.6f),
+        modifier = Modifier.padding(horizontal = 12.dp)
+    )
+}
+
+@Composable
+private fun PeerItem(
+    peer: PeerDisplayData,
+    isSelected: Boolean,
+    colorScheme: ColorScheme,
+    onItemClick: () -> Unit,
+    onToggleFavorite: () -> Unit
+) {
+    val isClickable = peer.peerId != null && !peer.isMe
+    val backgroundColor = if (isSelected) colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(backgroundColor)
+            .let { base ->
+                if (isClickable) {
+                    base.clickable { onItemClick() }
+                } else {
+                    base
+                }
+            }
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        when {
+            peer.hasUnreadMessages -> {
+                UnreadBadge(count = 1, colorScheme = colorScheme)
+            }
+            peer.connectionState == PeerConnectionState.MESH_CONNECTED -> {
+                SignalStrengthIndicator(signalStrength = peer.signalStrength, colorScheme = colorScheme)
+            }
+            peer.connectionState == PeerConnectionState.RELAY_CONNECTED -> {
+                Icon(
+                    imageVector = Icons.Outlined.Link,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = colorScheme.onSurfaceVariant
+                )
+            }
+            peer.connectionState == PeerConnectionState.NOSTR_AVAILABLE -> {
+                Icon(
+                    imageVector = Icons.Outlined.Language,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color(0xFF9C6BFF)
+                )
+            }
+            else -> {
+                Icon(
+                    imageVector = Icons.Outlined.RadioButtonUnchecked,
+                    contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = colorScheme.onSurface.copy(alpha = 0.3f)
+                )
+            }
         }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        val displayName = when {
+            peer.isMe -> stringResource(id = R.string.sidebar_label_you)
+            else -> peer.displayName
+        }
+
+        val statusLabel = when (peer.connectionState) {
+            PeerConnectionState.MESH_CONNECTED -> stringResource(id = R.string.sidebar_status_mesh)
+            PeerConnectionState.RELAY_CONNECTED -> stringResource(id = R.string.sidebar_status_relay)
+            PeerConnectionState.NOSTR_AVAILABLE -> stringResource(id = R.string.sidebar_status_nostr)
+            PeerConnectionState.OFFLINE -> stringResource(id = R.string.sidebar_status_offline)
+        }
+
+        val lastMessageLabel = peer.lastSeenEpochMillis?.takeIf { it > 0 }?.let { timestamp ->
+            val relative = DateUtils.getRelativeTimeSpanString(
+                timestamp,
+                System.currentTimeMillis(),
+                DateUtils.MINUTE_IN_MILLIS,
+                DateUtils.FORMAT_ABBREV_RELATIVE
+            ).toString()
+            stringResource(id = R.string.sidebar_last_message, relative)
+        }
+
+        val subtitle = listOfNotNull(statusLabel, lastMessageLabel).joinToString(" • ")
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = displayName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isSelected) colorScheme.primary else colorScheme.onSurface,
+                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+            )
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        if (!peer.isMe) {
+            IconButton(
+                onClick = onToggleFavorite,
+                enabled = peer.peerId != null
+            ) {
+                Icon(
+                    imageVector = if (peer.isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
+                    contentDescription = if (peer.isFavorite) stringResource(id = R.string.sidebar_remove_favorite) else stringResource(id = R.string.sidebar_add_favorite),
+                    tint = if (peer.isFavorite) Color(0xFFFFD700) else colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MyNostrSheet(
+    identity: NostrIdentity,
+    onDismiss: () -> Unit,
+    onSaveNpub: (String) -> Boolean,
+    onClearNpub: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    @Suppress("DEPRECATION")
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val qrBitmap = remember(identity.npub) { generateQrBitmap(identity.npub, 480) }
+    var input by remember(identity.npub) { mutableStateOf(identity.npub) }
+    var showError by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            tonalElevation = 8.dp,
+            shadowElevation = 16.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .widthIn(min = 280.dp, max = 360.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = stringResource(id = R.string.nostr_identity_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = colorScheme.onSurface
+                )
+
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = {
+                        input = it
+                        showError = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text(text = stringResource(id = R.string.nostr_identity_input_hint)) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                if (showError) {
+                    Text(
+                        text = stringResource(id = R.string.nostr_identity_invalid),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.error,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (qrBitmap != null) {
+                    Image(
+                        bitmap = qrBitmap,
+                        contentDescription = stringResource(id = R.string.nostr_identity_title),
+                        modifier = Modifier.size(220.dp)
+                    )
+                    Text(
+                        text = identity.npub,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    TextButton(onClick = {
+                        clipboardManager.setText(AnnotatedString(identity.npub))
+                        Toast.makeText(context, R.string.sidebar_npub_copied, Toast.LENGTH_SHORT).show()
+                    }) {
+                        Text(text = stringResource(id = R.string.nostr_identity_copy))
+                    }
+                    identity.encodedPrivate?.let { encodedNsec ->
+                        Text(
+                            text = encodedNsec,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    TextButton(onClick = {
+                        clipboardManager.setText(AnnotatedString(encodedNsec))
+                        Toast.makeText(context, R.string.nostr_identity_secret_copied, Toast.LENGTH_SHORT).show()
+                    }) {
+                            Text(text = stringResource(id = R.string.nostr_identity_copy_secret))
+                        }
+                    }
+                } else {
+                    Text(
+                        text = stringResource(id = R.string.nostr_identity_unavailable),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colorScheme.error
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(onClick = {
+                        val success = onSaveNpub(input)
+                        if (success) {
+                            Toast.makeText(context, R.string.nostr_identity_saved, Toast.LENGTH_SHORT).show()
+                            onDismiss()
+                        } else {
+                            showError = true
+                        }
+                    }) {
+                        Text(text = stringResource(id = R.string.nostr_identity_save))
+                    }
+
+                    TextButton(onClick = {
+                        onClearNpub()
+                        onDismiss()
+                    }) {
+                        Text(text = stringResource(id = R.string.nostr_identity_clear))
+                    }
+                }
+
+                Text(
+                    text = stringResource(id = R.string.nostr_identity_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                TextButton(onClick = onDismiss) {
+                    Text(text = stringResource(id = R.string.close))
+                }
+            }
+        }
+    }
+}
+
+private fun generateQrBitmap(data: String, size: Int): ImageBitmap? {
+    return try {
+        val bitMatrix = QRCodeWriter().encode(data, BarcodeFormat.QR_CODE, size, size)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val dark = Color.Black.toArgb()
+        val light = Color.White.toArgb()
+        for (x in 0 until size) {
+            for (y in 0 until size) {
+                bitmap.setPixel(x, y, if (bitMatrix[x, y]) dark else light)
+            }
+        }
+        bitmap.asImageBitmap()
+    } catch (e: Exception) {
+        null
     }
 }
 
